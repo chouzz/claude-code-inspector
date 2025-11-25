@@ -11,11 +11,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from mitmproxy import ctx, http
+from mitmproxy import http
 from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
-from cci.config import CCIConfig, MaskingConfig
+from cci.config import CCIConfig
 from cci.filters import URLFilter
 from cci.logger import get_logger, log_request_summary, log_streaming_progress
 from cci.models import (
@@ -59,9 +59,10 @@ class CCIAddon:
         self._logger = get_logger()
 
         # Track in-flight requests
-        self._request_times: dict[str, float] = {}
-        self._request_ids: dict[str, str] = {}
-        self._chunk_counts: dict[str, int] = {}
+        self._request_times: dict[int, float] = {}
+        self._request_ids: dict[int, str] = {}
+        self._chunk_counts: dict[int, int] = {}
+        self._chunk_buffers: dict[int, list[dict[str, Any]]] = {}
 
     def request(self, flow: http.HTTPFlow) -> None:
         """
@@ -70,8 +71,15 @@ class CCIAddon:
         Called when a client request is received by the proxy.
         """
         url = flow.request.pretty_url
+        
+        # Log all requests in debug mode
+        self._logger.debug("Intercepted request: %s %s", flow.request.method, url)
+        
         if not self.url_filter.should_capture(url):
+            self._logger.debug("URL not matched, skipping: %s", url)
             return
+
+        self._logger.info("Capturing request: %s %s", flow.request.method, url)
 
         # Generate unique request ID
         request_id = str(uuid4())
@@ -79,6 +87,7 @@ class CCIAddon:
         self._request_ids[flow_id] = request_id
         self._request_times[flow_id] = time.time()
         self._chunk_counts[flow_id] = 0
+        self._chunk_buffers[flow_id] = []
 
         # Parse headers (with masking)
         headers = self._mask_headers(dict(flow.request.headers))
@@ -102,7 +111,7 @@ class CCIAddon:
 
         self.writer.write_record(record)
         log_request_summary(flow.request.method, url)
-        self._logger.debug(f"Captured request {request_id[:8]}... to {url}")
+        self._logger.debug("Captured request %s to %s", request_id[:8], url)
 
     def response(self, flow: http.HTTPFlow) -> None:
         """
@@ -124,9 +133,25 @@ class CCIAddon:
         content_type = flow.response.headers.get("content-type", "")
         is_streaming = "text/event-stream" in content_type
 
+        self._logger.debug(
+            "Response received: %s %s (streaming=%s, content-type=%s)",
+            flow.response.status_code, url, is_streaming, content_type
+        )
+
         if is_streaming:
-            # Streaming responses are handled by responseheaders
-            pass
+            # For streaming, write meta record with buffered chunks info
+            chunk_buffer = self._chunk_buffers.get(flow_id, [])
+            meta_record = ResponseMetaRecord(
+                request_id=request_id,
+                total_latency_ms=latency_ms,
+                status_code=flow.response.status_code,
+                total_chunks=len(chunk_buffer),
+            )
+            self.writer.write_record(meta_record)
+            self._logger.info(
+                "Streaming response complete: %d chunks in %.0fms",
+                len(chunk_buffer), latency_ms
+            )
         else:
             # Non-streaming response - capture complete body
             headers = self._mask_headers(dict(flow.response.headers))
@@ -143,13 +168,17 @@ class CCIAddon:
                 latency_ms=latency_ms,
             )
             self.writer.write_record(record)
-
-            log_request_summary(
-                flow.request.method,
-                url,
-                flow.response.status_code,
-                latency_ms,
+            self._logger.info(
+                "Response captured: %s %s -> %d (%.0fms)",
+                flow.request.method, url, flow.response.status_code, latency_ms
             )
+
+        log_request_summary(
+            flow.request.method,
+            url,
+            flow.response.status_code,
+            latency_ms,
+        )
 
         # Cleanup
         self._cleanup_flow(flow_id)
@@ -160,64 +189,53 @@ class CCIAddon:
 
         Used to detect streaming responses and set up chunk capture.
         """
+        url = flow.request.pretty_url
+        if not self.url_filter.should_capture(url):
+            return
+            
         content_type = flow.response.headers.get("content-type", "")
         if "text/event-stream" in content_type:
-            # Mark flow for streaming capture
-            flow.response.stream = self._stream_response_handler(flow)
+            self._logger.debug("Setting up streaming capture for %s", url)
+            # Enable streaming mode
+            flow.response.stream = True
 
-    def _stream_response_handler(self, flow: http.HTTPFlow) -> Any:
+    def response_body_streaming(self, flow: http.HTTPFlow, chunk: bytes) -> bytes:
         """
-        Create a generator to handle streaming response chunks.
+        Handle streaming response body chunks.
 
-        Args:
-            flow: The HTTP flow being processed
-
-        Returns:
-            Generator that yields processed chunks
+        Called for each chunk of a streaming response.
         """
+        url = flow.request.pretty_url
+        if not self.url_filter.should_capture(url):
+            return chunk
+
         flow_id = id(flow)
-        request_id = self._request_ids.get(flow_id, str(uuid4()))
-        start_time = self._request_times.get(flow_id, time.time())
+        request_id = self._request_ids.get(flow_id)
+        
+        if request_id and chunk:
+            chunk_index = self._chunk_counts.get(flow_id, 0)
+            
+            # Parse SSE chunk
+            chunk_content = self._parse_sse_chunk(chunk)
 
-        def stream_chunks(chunks: Any) -> Any:
-            chunk_index = 0
-            for chunk in chunks:
-                if chunk:
-                    # Parse SSE chunk
-                    chunk_content = self._parse_sse_chunk(chunk)
-
-                    # Create chunk record
-                    record = ResponseChunkRecord(
-                        request_id=request_id,
-                        timestamp=datetime.now(timezone.utc),
-                        status_code=flow.response.status_code,
-                        chunk_index=chunk_index,
-                        content=chunk_content,
-                    )
-                    self.writer.write_record(record)
-                    log_streaming_progress(request_id, chunk_index)
-                    chunk_index += 1
-
-                yield chunk
-
-            # Write meta record at end of stream
-            latency_ms = (time.time() - start_time) * 1000
-            meta_record = ResponseMetaRecord(
+            # Create chunk record
+            record = ResponseChunkRecord(
                 request_id=request_id,
-                total_latency_ms=latency_ms,
+                timestamp=datetime.now(timezone.utc),
                 status_code=flow.response.status_code,
-                total_chunks=chunk_index,
+                chunk_index=chunk_index,
+                content=chunk_content,
             )
-            self.writer.write_record(meta_record)
-
-            log_request_summary(
-                flow.request.method,
-                flow.request.pretty_url,
-                flow.response.status_code,
-                latency_ms,
-            )
-
-        return stream_chunks
+            self.writer.write_record(record)
+            
+            # Store in buffer for summary
+            if flow_id in self._chunk_buffers:
+                self._chunk_buffers[flow_id].append(chunk_content)
+            
+            self._chunk_counts[flow_id] = chunk_index + 1
+            log_streaming_progress(request_id, chunk_index)
+            
+        return chunk
 
     def _parse_body(self, content: bytes | None, content_type: str | None) -> Any:
         """Parse request/response body based on content type."""
@@ -242,7 +260,7 @@ class CCIAddon:
                 return f"<binary content: {len(content)} bytes>"
 
         except Exception as e:
-            self._logger.debug(f"Failed to parse body: {e}")
+            self._logger.debug("Failed to parse body: %s", e)
             return f"<parse error: {e}>"
 
     def _parse_sse_chunk(self, chunk: bytes) -> Any:
@@ -333,6 +351,7 @@ class CCIAddon:
         self._request_times.pop(flow_id, None)
         self._request_ids.pop(flow_id, None)
         self._chunk_counts.pop(flow_id, None)
+        self._chunk_buffers.pop(flow_id, None)
 
 
 async def run_proxy(
@@ -346,7 +365,10 @@ async def run_proxy(
         config: CCI configuration
         output_path: Path for JSONL output
     """
-    from cci.filters import URLFilter
+    logger = get_logger()
+    logger.info("Starting proxy on %s:%d", config.proxy.host, config.proxy.port)
+    logger.info("Output file: %s", output_path)
+    logger.info("URL patterns: %s", config.filter.include_patterns)
 
     # Create writer and filter
     writer = JSONLWriter(output_path)
@@ -368,8 +390,13 @@ async def run_proxy(
     master = DumpMaster(opts)
     master.addons.add(addon)
 
+    logger.info("Proxy initialized, starting to capture traffic...")
+
     try:
         await master.run()
+    except Exception as e:
+        logger.error("Proxy error: %s", e)
+        raise
     finally:
         writer.close()
-
+        logger.info("Proxy stopped, output saved to %s", output_path)

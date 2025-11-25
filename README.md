@@ -59,10 +59,21 @@ export HTTP_PROXY=http://127.0.0.1:8080
 export HTTPS_PROXY=http://127.0.0.1:8080
 ```
 
+**Important for Node.js Applications (Claude Code, Cursor, etc.):**
+
+Node.js applications require the `NODE_EXTRA_CA_CERTS` environment variable to trust the mitmproxy CA certificate:
+
+```bash
+export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
+```
+
 ### 3. Run Your AI Tool
 
 ```bash
-# Example with Claude Code
+# Example with Claude Code (full configuration)
+export HTTP_PROXY=http://127.0.0.1:8080
+export HTTPS_PROXY=http://127.0.0.1:8080
+export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
 claude -p "hello"
 
 # Or Cursor, Codex, etc.
@@ -355,6 +366,24 @@ Add custom providers with `--include` or in the config file.
 1. Ensure the mitmproxy CA certificate is installed
 2. Run `cci config --cert-help` for instructions
 3. For testing, some tools support `--insecure` or `verify=False`
+
+### Node.js Apps Not Working (Claude Code, Cursor, etc.)
+
+**Problem:** Requests hang or timeout when using Claude Code or other Node.js-based tools
+
+**Solution:**
+Node.js requires the `NODE_EXTRA_CA_CERTS` environment variable to trust custom CA certificates:
+
+```bash
+export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
+```
+
+Make sure all three variables are set:
+```bash
+export HTTP_PROXY=http://127.0.0.1:8080
+export HTTPS_PROXY=http://127.0.0.1:8080
+export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
+```
 
 ### Proxy Connection Refused
 
