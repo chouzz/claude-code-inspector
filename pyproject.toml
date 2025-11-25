@@ -1,0 +1,69 @@
+[project]
+name = "claude-code-inspector"
+version = "1.0.0"
+description = "A MITM proxy tool to intercept, analyze and log AI coding assistant communications with LLM APIs"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "chouzz" }
+]
+keywords = ["mitmproxy", "llm", "api", "inspector", "claude", "openai", "debugging"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: Internet :: Proxy Servers",
+]
+
+dependencies = [
+    "mitmproxy>=10.0.0",
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "pydantic>=2.0.0",
+    "tomli>=2.0.0;python_version<'3.11'",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+cci = "cci.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/chouzz/claude-code-inspector"
+Documentation = "https://github.com/chouzz/claude-code-inspector#readme"
+Repository = "https://github.com/chouzz/claude-code-inspector"
+Issues = "https://github.com/chouzz/claude-code-inspector/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cci"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+
