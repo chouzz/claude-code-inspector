@@ -94,6 +94,16 @@ class NonStreamingResponseRecord(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat() + "Z"}
 
 
+class ToolCall(BaseModel):
+    """
+    Represents a tool call extracted from streaming response.
+    """
+
+    id: str
+    name: str
+    input: Any = None
+
+
 class MergedRecord(BaseModel):
     """
     Merged record combining request and all response chunks.
@@ -108,6 +118,7 @@ class MergedRecord(BaseModel):
     request_body: Any = None
     response_status: int
     response_text: str = ""
+    tool_calls: list[ToolCall] = Field(default_factory=list)
     total_latency_ms: float
     chunk_count: int = 0
 

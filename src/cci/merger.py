@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from cci.logger import get_logger
-from cci.models import MergedRecord
+from cci.models import MergedRecord, ToolCall
 from cci.storage import JSONLWriter, read_jsonl
 
 
@@ -96,8 +96,9 @@ class StreamMerger:
                 )
                 meta = metas.get(request_id, {})
 
-                # Extract text from chunks
+                # Extract text and tool calls from chunks
                 response_text = self._extract_text_from_chunks(request_chunks)
+                tool_calls = self._extract_tool_calls_from_chunks(request_chunks)
 
                 merged = MergedRecord(
                     request_id=request_id,
@@ -109,6 +110,7 @@ class StreamMerger:
                     if request_chunks
                     else 0,
                     response_text=response_text,
+                    tool_calls=tool_calls,
                     total_latency_ms=meta.get("total_latency_ms", 0),
                     chunk_count=len(request_chunks),
                 )
@@ -120,10 +122,12 @@ class StreamMerger:
                 # Non-streaming request
                 response = non_streaming[request_id]
 
-                # Extract text from body
+                # Extract text and tool calls from body
                 body = response.get("body")
+                tool_calls: list[ToolCall] = []
                 if isinstance(body, dict):
                     response_text = self._extract_text_from_body(body)
+                    tool_calls = self._extract_tool_calls_from_body(body)
                 elif isinstance(body, str):
                     response_text = body
                 else:
@@ -137,6 +141,7 @@ class StreamMerger:
                     request_body=request.get("body"),
                     response_status=response.get("status_code", 0),
                     response_text=response_text,
+                    tool_calls=tool_calls,
                     total_latency_ms=response.get("latency_ms", 0),
                     chunk_count=0,
                 )
@@ -194,6 +199,70 @@ class StreamMerger:
 
         return "".join(text_parts)
 
+    def _extract_tool_calls_from_chunks(self, chunks: list[dict[str, Any]]) -> list[ToolCall]:
+        """Extract tool calls from streaming chunks.
+
+        Tool calls in Anthropic streaming format come in three stages:
+        1. content_block_start with type=tool_use: contains id, name, and empty input
+        2. content_block_delta with input_json_delta: contains partial JSON fragments
+        3. content_block_stop: marks the end of the tool call
+
+        We need to aggregate all input_json_delta fragments by content block index.
+        """
+        # Track tool calls by their content block index
+        tool_call_data: dict[int, dict[str, Any]] = {}
+        tool_input_parts: dict[int, list[str]] = defaultdict(list)
+
+        for chunk in chunks:
+            content = chunk.get("content", {})
+            if not isinstance(content, dict):
+                continue
+
+            content_type = content.get("type", "")
+            index = content.get("index")
+
+            # Start of a tool_use content block
+            if content_type == "content_block_start":
+                block = content.get("content_block", {})
+                if isinstance(block, dict) and block.get("type") == "tool_use":
+                    tool_call_data[index] = {
+                        "id": block.get("id", ""),
+                        "name": block.get("name", ""),
+                    }
+
+            # Delta containing input JSON fragments
+            elif content_type == "content_block_delta":
+                delta = content.get("delta", {})
+                if isinstance(delta, dict) and delta.get("type") == "input_json_delta":
+                    partial_json = delta.get("partial_json", "")
+                    if partial_json and index is not None:
+                        tool_input_parts[index].append(partial_json)
+
+        # Build the final tool calls list
+        tool_calls: list[ToolCall] = []
+        for index, data in sorted(tool_call_data.items()):
+            # Concatenate all JSON fragments for this tool call
+            full_json_str = "".join(tool_input_parts.get(index, []))
+
+            # Try to parse the JSON input
+            tool_input = None
+            if full_json_str:
+                try:
+                    tool_input = json.loads(full_json_str)
+                except json.JSONDecodeError:
+                    # If parsing fails, keep the raw string
+                    tool_input = full_json_str
+
+            tool_calls.append(
+                ToolCall(
+                    id=data["id"],
+                    name=data["name"],
+                    input=tool_input,
+                )
+            )
+
+        return tool_calls
+
     def _extract_text_from_body(self, body: dict[str, Any]) -> str:
         """Extract text from a non-streaming response body."""
         # Anthropic format
@@ -219,6 +288,44 @@ class StreamMerger:
 
         # Fallback: JSON dump
         return json.dumps(body)
+
+    def _extract_tool_calls_from_body(self, body: dict[str, Any]) -> list[ToolCall]:
+        """Extract tool calls from a non-streaming response body.
+
+        In Anthropic's non-streaming format, tool calls appear as content blocks
+        with type="tool_use" in the content array.
+        """
+        tool_calls: list[ToolCall] = []
+
+        # Anthropic format
+        if "content" in body:
+            content = body["content"]
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and item.get("type") == "tool_use":
+                        tool_calls.append(
+                            ToolCall(
+                                id=item.get("id", ""),
+                                name=item.get("name", ""),
+                                input=item.get("input"),
+                            )
+                        )
+
+        # OpenAI format
+        if "choices" in body:
+            for choice in body.get("choices", []):
+                message = choice.get("message", {})
+                if "tool_calls" in message:
+                    for tc in message.get("tool_calls", []):
+                        tool_calls.append(
+                            ToolCall(
+                                id=tc.get("id", ""),
+                                name=tc.get("function", {}).get("name", ""),
+                                input=tc.get("function", {}).get("arguments"),
+                            )
+                        )
+
+        return tool_calls
 
     def _parse_timestamp(self, ts: Any) -> datetime:
         """Parse a timestamp from various formats."""
