@@ -83,10 +83,14 @@ claude -p "hello"
 
 Press `Ctrl+C` to stop the proxy.
 
-### 5. (Optional) Merge Streaming Chunks
+### 5. (Optional) Merge and Split
 
 ```bash
+# Merge streaming chunks into complete records
 cci merge --input my_trace.jsonl --output merged.jsonl
+
+# Split merged records into individual text files for analysis
+cci split --input merged.jsonl --output-dir ./split_output
 ```
 
 ## 📖 Certificate Installation
@@ -189,6 +193,24 @@ Options:
 
 ```bash
 cci merge --input raw_trace.jsonl --output conversations.jsonl
+```
+
+### `cci split`
+
+Split merged JSONL into individual text files for analysis.
+
+```bash
+cci split --input <file> --output-dir <directory>
+
+Options:
+  -i, --input PATH       Input merged JSONL file [required]
+  -o, --output-dir PATH  Output directory for split files (default: ./split_output)
+```
+
+**Example:**
+
+```bash
+cci split --input merged.jsonl --output-dir ./analysis
 ```
 
 ### `cci config`
