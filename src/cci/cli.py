@@ -497,6 +497,12 @@ def stats(file: str) -> None:
     help="Root output directory (default: ./traces)",
 )
 @click.option(
+    "--include",
+    "-i",
+    multiple=True,
+    help="Additional URL patterns to include (regex)",
+)
+@click.option(
     "--debug",
     is_flag=True,
     help="Enable debug mode with verbose logging",
@@ -506,6 +512,7 @@ def watch(
     ctx: click.Context,
     port: int,
     output_dir: str,
+    include: tuple[str, ...],
     debug: bool,
 ) -> None:
     """
@@ -526,6 +533,8 @@ def watch(
 
         cci watch --port 9090 --output-dir ./my_traces
 
+        cci watch --include ".*my-custom-api\\.com.*"
+
     Configure your target application to use this proxy:
 
         export HTTP_PROXY=http://127.0.0.1:9090
@@ -541,6 +550,10 @@ def watch(
 
     # Apply CLI overrides
     config.proxy.port = port
+
+    # Add custom include patterns
+    for pattern in include:
+        config.filter.include_patterns.append(pattern)
 
     if debug:
         config.logging.level = "DEBUG"
