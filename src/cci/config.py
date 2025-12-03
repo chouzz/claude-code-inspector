@@ -21,7 +21,7 @@ else:
 class FilterConfig(BaseModel):
     """URL filtering configuration."""
 
-    # Patterns to include (regex patterns)
+    # Patterns to include (regex patterns, used internally for built-in providers)
     include_patterns: list[str] = Field(
         default_factory=lambda: [
             r".*api\.anthropic\.com.*",
@@ -34,8 +34,12 @@ class FilterConfig(BaseModel):
             r".*api\.deepseek\.com.*",
         ]
     )
-    # Patterns to exclude (takes precedence)
+    # Patterns to exclude (regex patterns, takes precedence)
     exclude_patterns: list[str] = Field(default_factory=list)
+    # Glob patterns to include (user-friendly, e.g. "*api.example.com*")
+    include_globs: list[str] = Field(default_factory=list)
+    # Glob patterns to exclude (user-friendly, takes precedence)
+    exclude_globs: list[str] = Field(default_factory=list)
 
 
 class MaskingConfig(BaseModel):

@@ -167,7 +167,7 @@ cci watch [OPTIONS]
 Options:
   -p, --port INTEGER       Proxy server port (default: 9090)
   -o, --output-dir PATH    Root output directory (default: ./traces)
-  -i, --include TEXT       Additional URL patterns to include (regex)
+  -i, --include TEXT       Additional URL patterns to include (glob pattern)
   --debug                  Enable debug mode with verbose logging
 ```
 
@@ -180,9 +180,21 @@ cci watch
 # Custom port and output directory
 cci watch --port 8888 --output-dir ./my_traces
 
-# Include custom API endpoint
-cci watch --include ".*my-custom-api\.com.*"
+# Include custom API endpoint (glob pattern)
+cci watch --include "*my-custom-api.com*"
+
+# Match all subdomains of a domain
+cci watch --include "*api.example.com*"
 ```
+
+**Glob Pattern Syntax:**
+
+| Pattern | Description |
+|---------|-------------|
+| `*` | Matches any characters |
+| `?` | Matches a single character |
+| `[seq]` | Matches any character in seq |
+| `[!seq]` | Matches any character not in seq |
 
 ### `cci config`
 
@@ -217,9 +229,9 @@ CCI is pre-configured to capture traffic from:
 | Cohere | `api.cohere.ai` |
 | DeepSeek | `api.deepseek.com` |
 
-Add custom providers with `--include`:
+Add custom providers with `--include` (using glob patterns):
 ```bash
-cci watch --include ".*my-custom-api\.com.*"
+cci watch --include "*my-custom-api.com*"
 ```
 
 ## 🐛 Troubleshooting

@@ -4,10 +4,13 @@ Command-line interface for Claude-Code-Inspector.
 Provides the `cci` command with subcommands for capture, merge, watch, and config.
 """
 
+from __future__ import annotations
+
 import asyncio
 import sys
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 from rich.console import Console
@@ -18,6 +21,9 @@ from rich.text import Text
 
 from cci import __version__
 from cci.config import get_cert_info, load_config
+
+if TYPE_CHECKING:
+    from cci.config import CCIConfig
 from cci.logger import log_startup_banner, setup_logger
 from cci.merger import merge_streams
 from cci.splitter import split_records
@@ -78,13 +84,13 @@ def main(ctx: click.Context, config_path: str | None) -> None:
     "--include",
     "-i",
     multiple=True,
-    help="Additional URL patterns to include (regex)",
+    help="Additional URL patterns to include (glob pattern, e.g. '*api.example.com*')",
 )
 @click.option(
     "--exclude",
     "-e",
     multiple=True,
-    help="URL patterns to exclude (regex)",
+    help="URL patterns to exclude (glob pattern, e.g. '*health*')",
 )
 @click.pass_context
 def capture(
@@ -106,7 +112,7 @@ def capture(
 
         cci capture --port 8080 --output my_trace.jsonl
 
-        cci capture --debug --include ".*my-custom-api\\.com.*"
+        cci capture --debug --include "*my-custom-api.com*"
 
     Configure your target application to use this proxy:
 
@@ -125,11 +131,11 @@ def capture(
     if debug:
         config.logging.level = "DEBUG"
 
-    # Add custom patterns
+    # Add custom glob patterns (user-provided via CLI)
     for pattern in include:
-        config.filter.include_patterns.append(pattern)
+        config.filter.include_globs.append(pattern)
     for pattern in exclude:
-        config.filter.exclude_patterns.append(pattern)
+        config.filter.exclude_globs.append(pattern)
 
     # Setup logging
     setup_logger(config.logging.level, config.logging.log_file)
@@ -145,6 +151,9 @@ def capture(
 
     # Display startup banner
     log_startup_banner(host, port)
+
+    # Display filter rules
+    _display_filter_rules(config)
 
     # Run the proxy
     try:
@@ -500,7 +509,7 @@ def stats(file: str) -> None:
     "--include",
     "-i",
     multiple=True,
-    help="Additional URL patterns to include (regex)",
+    help="Additional URL patterns to include (glob pattern, e.g. '*api.example.com*')",
 )
 @click.option(
     "--debug",
@@ -533,7 +542,7 @@ def watch(
 
         cci watch --port 9090 --output-dir ./my_traces
 
-        cci watch --include ".*my-custom-api\\.com.*"
+        cci watch --include "*my-custom-api.com*"
 
     Configure your target application to use this proxy:
 
@@ -551,9 +560,9 @@ def watch(
     # Apply CLI overrides
     config.proxy.port = port
 
-    # Add custom include patterns
+    # Add custom glob patterns (user-provided via CLI)
     for pattern in include:
-        config.filter.include_patterns.append(pattern)
+        config.filter.include_globs.append(pattern)
 
     if debug:
         config.logging.level = "DEBUG"
@@ -574,7 +583,7 @@ def watch(
     watch_manager = WatchManager(output_dir=output_dir, port=port)
 
     # Display startup info
-    _display_watch_banner(port, output_dir, watch_manager.global_log_path)
+    _display_watch_banner(port, output_dir, watch_manager.global_log_path, config)
 
     # Initialize watch manager
     watch_manager.initialize()
@@ -619,7 +628,12 @@ def watch(
             console.print(f"[green]Global log:[/] {watch_manager.global_log_path}")
 
 
-def _display_watch_banner(port: int, output_dir: str, global_log_path: Path) -> None:
+def _display_watch_banner(
+    port: int,
+    output_dir: str,
+    global_log_path: Path,
+    config: "CCIConfig",
+) -> None:
     """Display the watch mode startup banner."""
     console.print()
     console.print(Panel.fit(
@@ -632,10 +646,48 @@ def _display_watch_banner(port: int, output_dir: str, global_log_path: Path) -> 
     console.print(f"  [cyan]Output Dir:[/]    {output_dir}")
     console.print(f"  [cyan]Global Log:[/]    {global_log_path}")
     console.print()
+
+    # Display filter rules
+    _display_filter_rules(config)
+
     console.print("[dim]Configure your application:[/]")
     console.print(f"  export HTTP_PROXY=http://127.0.0.1:{port}")
     console.print(f"  export HTTPS_PROXY=http://127.0.0.1:{port}")
     console.print("  export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem")
+    console.print()
+
+
+def _display_filter_rules(config: "CCIConfig") -> None:
+    """Display the current URL filter rules."""
+    console.print("[bold cyan]URL Filter Rules:[/]")
+
+    # Built-in include patterns (regex)
+    if config.filter.include_patterns:
+        console.print("  [green]Include (built-in):[/]")
+        for pattern in config.filter.include_patterns:
+            # Extract domain name from regex pattern for display
+            # e.g., ".*api\.anthropic\.com.*" -> "api.anthropic.com"
+            display = pattern.replace(r".*", "").replace("\\.", ".")
+            console.print(f"    [dim]•[/] {display}")
+
+    # User-provided include globs
+    if config.filter.include_globs:
+        console.print("  [green]Include (custom glob):[/]")
+        for pattern in config.filter.include_globs:
+            console.print(f"    [bold green]•[/] {pattern}")
+
+    # Exclude patterns
+    if config.filter.exclude_patterns:
+        console.print("  [red]Exclude (regex):[/]")
+        for pattern in config.filter.exclude_patterns:
+            display = pattern.replace(r".*", "").replace("\\.", ".")
+            console.print(f"    [dim]•[/] {display}")
+
+    if config.filter.exclude_globs:
+        console.print("  [red]Exclude (custom glob):[/]")
+        for pattern in config.filter.exclude_globs:
+            console.print(f"    [bold red]•[/] {pattern}")
+
     console.print()
 
 

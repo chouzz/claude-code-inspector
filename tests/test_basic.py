@@ -76,6 +76,91 @@ class TestURLFilter:
         assert not url_filter.should_capture("https://example.com/health")
 
 
+class TestURLFilterGlob:
+    """Test URL filtering with glob patterns."""
+
+    def test_glob_include_pattern(self) -> None:
+        """Test that glob include patterns work."""
+        config = FilterConfig(
+            include_patterns=[],  # Clear default regex patterns
+            include_globs=["*api.example.com*"],
+        )
+        url_filter = URLFilter(config)
+        assert url_filter.should_capture("https://api.example.com/v1/messages")
+        assert url_filter.should_capture("https://api.example.com/health")
+        assert not url_filter.should_capture("https://other.com/api")
+
+    def test_glob_exclude_pattern(self) -> None:
+        """Test that glob exclude patterns work."""
+        config = FilterConfig(
+            include_patterns=[],
+            include_globs=["*example.com*"],
+            exclude_globs=["*health*"],
+        )
+        url_filter = URLFilter(config)
+        assert url_filter.should_capture("https://example.com/api")
+        assert not url_filter.should_capture("https://example.com/health")
+
+    def test_glob_wildcard_subdomain(self) -> None:
+        """Test that glob patterns match subdomains."""
+        config = FilterConfig(
+            include_patterns=[],
+            include_globs=["*.my-custom-api.com*"],
+        )
+        url_filter = URLFilter(config)
+        assert url_filter.should_capture("https://api.my-custom-api.com/v1/chat")
+        assert url_filter.should_capture("https://test.my-custom-api.com/api")
+        assert not url_filter.should_capture("https://my-custom-api.org/api")
+
+    def test_glob_case_insensitive(self) -> None:
+        """Test that glob matching is case insensitive."""
+        config = FilterConfig(
+            include_patterns=[],
+            include_globs=["*api.example.com*"],
+        )
+        url_filter = URLFilter(config)
+        assert url_filter.should_capture("https://API.EXAMPLE.COM/v1/messages")
+        assert url_filter.should_capture("https://Api.Example.Com/v1/messages")
+
+    def test_glob_add_at_runtime(self) -> None:
+        """Test adding glob patterns at runtime."""
+        config = FilterConfig(include_patterns=[])
+        url_filter = URLFilter(config)
+
+        # Initially no match
+        assert not url_filter.should_capture("https://api.newsite.com/v1")
+
+        # Add glob pattern at runtime
+        url_filter.add_include_glob("*newsite.com*")
+        assert url_filter.should_capture("https://api.newsite.com/v1")
+
+    def test_glob_question_mark_wildcard(self) -> None:
+        """Test that ? matches single character."""
+        config = FilterConfig(
+            include_patterns=[],
+            include_globs=["*api?.example.com*"],
+        )
+        url_filter = URLFilter(config)
+        assert url_filter.should_capture("https://api1.example.com/v1")
+        assert url_filter.should_capture("https://apix.example.com/v1")
+        assert not url_filter.should_capture("https://api.example.com/v1")
+        assert not url_filter.should_capture("https://api12.example.com/v1")
+
+    def test_glob_with_regex_patterns(self) -> None:
+        """Test that glob and regex patterns work together."""
+        config = FilterConfig(
+            include_patterns=[".*anthropic\\.com.*"],  # Regex pattern
+            include_globs=["*openai.com*"],  # Glob pattern
+        )
+        url_filter = URLFilter(config)
+        # Regex pattern should match
+        assert url_filter.should_capture("https://api.anthropic.com/v1/messages")
+        # Glob pattern should match
+        assert url_filter.should_capture("https://api.openai.com/v1/chat")
+        # Neither should match
+        assert not url_filter.should_capture("https://example.com/api")
+
+
 class TestModels:
     """Test data models."""
 
