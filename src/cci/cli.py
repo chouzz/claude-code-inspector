@@ -1,16 +1,20 @@
 """
 Command-line interface for Claude-Code-Inspector.
 
-Provides the `cci` command with subcommands for capture, merge, and config.
+Provides the `cci` command with subcommands for capture, merge, watch, and config.
 """
 
 import asyncio
 import sys
+import threading
 from pathlib import Path
 
 import click
 from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from cci import __version__
 from cci.config import get_cert_info, load_config
@@ -475,6 +479,217 @@ def stats(file: str) -> None:
     table.add_row("[bold]Total[/]", f"[bold]{total}[/]")
 
     console.print(table)
+
+
+@main.command()
+@click.option(
+    "--port",
+    "-p",
+    type=int,
+    default=9090,
+    help="Proxy server port (default: 9090)",
+)
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(),
+    default="./traces",
+    help="Root output directory (default: ./traces)",
+)
+@click.option(
+    "--debug",
+    is_flag=True,
+    help="Enable debug mode with verbose logging",
+)
+@click.pass_context
+def watch(
+    ctx: click.Context,
+    port: int,
+    output_dir: str,
+    debug: bool,
+) -> None:
+    """
+    Start watch mode for continuous session capture.
+
+    Watch mode provides an interactive interface to capture multiple
+    coding sessions. Press Enter to toggle between IDLE and RECORDING
+    states.
+
+    State Machine:
+      - IDLE: Traffic is captured but not assigned to a session
+      - RECORDING: Traffic is captured with session ID injection
+      - PROCESSING: Session data is extracted, merged, and split
+
+    Examples:
+
+        cci watch
+
+        cci watch --port 9090 --output-dir ./my_traces
+
+    Configure your target application to use this proxy:
+
+        export HTTP_PROXY=http://127.0.0.1:9090
+
+        export HTTPS_PROXY=http://127.0.0.1:9090
+
+        export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
+    """
+    from cci.watch import WatchManager, WatchState
+
+    # Load configuration
+    config = load_config(ctx.obj.get("config_path"))
+
+    # Apply CLI overrides
+    config.proxy.port = port
+
+    if debug:
+        config.logging.level = "DEBUG"
+
+    # Setup logging
+    setup_logger(config.logging.level, config.logging.log_file)
+
+    # Check certificate
+    cert_info = get_cert_info()
+    if not cert_info["exists"]:
+        console.print(
+            "[yellow]⚠ mitmproxy CA certificate not found.[/]\n"
+            "  Run 'cci config --cert-help' for installation instructions.\n"
+            "  The certificate will be generated on first run.\n"
+        )
+
+    # Create watch manager
+    watch_manager = WatchManager(output_dir=output_dir, port=port)
+
+    # Display startup info
+    _display_watch_banner(port, output_dir, watch_manager.global_log_path)
+
+    # Initialize watch manager
+    watch_manager.initialize()
+
+    # State for controlling the event loop
+    proxy_task = None
+    stop_event = threading.Event()
+
+    def run_proxy_in_thread() -> None:
+        """Run the proxy in a separate thread."""
+        from cci.proxy import run_watch_proxy
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_watch_proxy(config, watch_manager))
+        except Exception as e:
+            if not stop_event.is_set():
+                console.print(f"[red]Proxy error:[/] {e}")
+        finally:
+            loop.close()
+
+    # Start proxy in background thread
+    proxy_thread = threading.Thread(target=run_proxy_in_thread, daemon=True)
+    proxy_thread.start()
+
+    try:
+        # Main interactive loop
+        _run_watch_loop(watch_manager, stop_event)
+    except KeyboardInterrupt:
+        console.print("\n[cyan]Watch mode stopped.[/]")
+    finally:
+        stop_event.set()
+        watch_manager.shutdown()
+
+        # Show summary
+        output_path = Path(output_dir)
+        if output_path.exists():
+            session_dirs = [d for d in output_path.iterdir() if d.is_dir() and "session" in d.name]
+            console.print(f"\n[green]Sessions captured:[/] {len(session_dirs)}")
+            console.print(f"[green]Output directory:[/] {output_path.absolute()}")
+            console.print(f"[green]Global log:[/] {watch_manager.global_log_path}")
+
+
+def _display_watch_banner(port: int, output_dir: str, global_log_path: Path) -> None:
+    """Display the watch mode startup banner."""
+    console.print()
+    console.print(Panel.fit(
+        "[bold cyan]CCI Watch Mode[/]\n"
+        "[dim]Continuous Capture Interface[/]",
+        border_style="cyan"
+    ))
+    console.print()
+    console.print(f"  [cyan]Proxy Port:[/]    {port}")
+    console.print(f"  [cyan]Output Dir:[/]    {output_dir}")
+    console.print(f"  [cyan]Global Log:[/]    {global_log_path}")
+    console.print()
+    console.print("[dim]Configure your application:[/]")
+    console.print(f"  export HTTP_PROXY=http://127.0.0.1:{port}")
+    console.print(f"  export HTTPS_PROXY=http://127.0.0.1:{port}")
+    console.print("  export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem")
+    console.print()
+
+
+def _run_watch_loop(watch_manager: "WatchManager", stop_event: threading.Event) -> None:
+    """Run the main watch mode interaction loop."""
+    from cci.watch import WatchState
+
+    while not stop_event.is_set():
+        state = watch_manager.state
+
+        if state == WatchState.IDLE:
+            # Display IDLE prompt
+            console.print(
+                f"[bold green]●[/] [green][IDLE][/] Monitoring on :{watch_manager.port}... "
+                f"Logging to [cyan]{watch_manager.global_log_path.name}[/]"
+            )
+            console.print(
+                f"  [dim]Press [Enter] to START Session {watch_manager.next_session_id}[/]"
+            )
+
+            try:
+                input()
+            except EOFError:
+                break
+
+            if stop_event.is_set():
+                break
+
+            # Start recording
+            try:
+                session = watch_manager.start_recording()
+                console.print(
+                    f"\n[bold red]◉[/] [red][REC][/] Session [bold]{session.session_id}[/] is recording..."
+                )
+                console.print("  [dim]Press [Enter] to STOP & PROCESS[/]")
+            except RuntimeError as e:
+                console.print(f"[red]Error starting recording:[/] {e}")
+
+        elif state == WatchState.RECORDING:
+            try:
+                input()
+            except EOFError:
+                break
+
+            if stop_event.is_set():
+                break
+
+            # Stop recording and process
+            try:
+                session = watch_manager.stop_recording()
+                console.print(
+                    f"\n[bold yellow]⏳[/] [yellow][BUSY][/] Processing Session [bold]{session.session_id}[/]..."
+                )
+
+                # Process the session
+                session_dir = watch_manager.process_session(session)
+                console.print(
+                    f"  [green]✔[/] Saved to [cyan]{session_dir}/[/]"
+                )
+                console.print()
+            except RuntimeError as e:
+                console.print(f"[red]Error processing session:[/] {e}")
+
+        elif state == WatchState.PROCESSING:
+            # Wait for processing to complete (should not normally reach here)
+            import time
+            time.sleep(0.1)
 
 
 if __name__ == "__main__":

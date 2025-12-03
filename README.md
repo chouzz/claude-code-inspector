@@ -12,12 +12,12 @@
 
 ## ✨ Features
 
+- **Watch Mode** - Interactive continuous capture with session management
 - **Transparent Inspection** - See exactly what prompts are sent and what responses are received
 - **Streaming Support** - Captures both streaming (SSE) and non-streaming API responses
 - **Multi-Provider** - Works with Anthropic, OpenAI, Google, Groq, Together, Mistral, and more
 - **Automatic Masking** - Protects API keys and sensitive data in logs
-- **JSONL Output** - Structured data format for easy analysis and processing
-- **Stream Merger** - Tool to consolidate streaming chunks into complete conversations
+- **Auto Processing** - Automatically merges and splits session data
 - **Cross-Platform** - Works on Windows, macOS, and Linux
 
 ## 📦 Installation
@@ -37,180 +37,151 @@ uv add claude-code-inspector
 ### From source
 
 ```bash
-git clone https://github.com/your-repo/claude-code-inspector.git
+git clone https://github.com/chouzz/claude-code-inspector.git
 cd claude-code-inspector
 uv sync
 ```
 
 ## 🚀 Quick Start
 
-### 1. Start the Proxy
+### 1. Install Certificate (First Time Only)
 
 ```bash
-cci capture --port 8080 --output my_trace.jsonl
-```
-
-### 2. Configure Your Application
-
-Set the proxy environment variables before running your AI tool:
-
-```bash
-export HTTP_PROXY=http://127.0.0.1:8080
-export HTTPS_PROXY=http://127.0.0.1:8080
-```
-
-**Important for Node.js Applications (Claude Code, Cursor, etc.):**
-
-Node.js applications require the `NODE_EXTRA_CA_CERTS` environment variable to trust the mitmproxy CA certificate:
-
-```bash
-export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
-```
-
-### 3. Run Your AI Tool
-
-```bash
-# Example with Claude Code (full configuration)
-export HTTP_PROXY=http://127.0.0.1:8080
-export HTTPS_PROXY=http://127.0.0.1:8080
-export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
-claude -p "hello"
-
-# Or Cursor, Codex, etc.
-```
-
-### 4. Stop Capture
-
-Press `Ctrl+C` to stop the proxy.
-
-### 5. (Optional) Merge and Split
-
-```bash
-# Merge streaming chunks into complete records
-cci merge --input my_trace.jsonl --output merged.jsonl
-
-# Split merged records into individual text files for analysis
-cci split --input merged.jsonl --output-dir ./split_output
-```
-
-## 📖 Certificate Installation
-
-To intercept HTTPS traffic, you need to install the mitmproxy CA certificate.
-
-### macOS
-
-1. Run `cci capture` once to generate the certificate
-2. Open the certificate:
-   ```bash
-   open ~/.mitmproxy/mitmproxy-ca-cert.pem
-   ```
-3. Double-click to add to Keychain
-4. In Keychain Access, find "mitmproxy"
-5. Double-click → Trust → "Always Trust"
-
-### Linux (Ubuntu/Debian)
-
-```bash
-# Generate certificate first
-cci capture &
+# Generate certificate
+cci watch &
 sleep 2
 kill %1
+```
 
-# Install certificate
+Then install the certificate:
+
+**macOS:**
+```bash
+open ~/.mitmproxy/mitmproxy-ca-cert.pem
+# Double-click to add to Keychain
+# In Keychain Access, find "mitmproxy" → Double-click → Trust → "Always Trust"
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
 sudo cp ~/.mitmproxy/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy.crt
 sudo update-ca-certificates
 ```
 
-### Linux (Fedora/RHEL)
+**Windows:**
+Navigate to `%USERPROFILE%\.mitmproxy\`, double-click `mitmproxy-ca-cert.pem` → Install Certificate → Local Machine → Trusted Root Certification Authorities
+
+### 2. Start Watch Mode
 
 ```bash
-sudo cp ~/.mitmproxy/mitmproxy-ca-cert.pem /etc/pki/ca-trust/source/anchors/
-sudo update-ca-trust
+cci watch
 ```
 
-### Windows
-
-1. Run `cci capture` once to generate the certificate
-2. Navigate to `%USERPROFILE%\.mitmproxy\`
-3. Double-click `mitmproxy-ca-cert.pem`
-4. Click "Install Certificate"
-5. Select "Local Machine" → Next
-6. "Place all certificates in the following store"
-7. Browse → "Trusted Root Certification Authorities"
-8. Finish
-
-### Certificate Help Command
+### 3. Configure Your Application (New Terminal)
 
 ```bash
-cci config --cert-help
+export HTTP_PROXY=http://127.0.0.1:9090
+export HTTPS_PROXY=http://127.0.0.1:9090
+export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
+
+# Run your AI tool
+claude -p "hello"
 ```
 
+### 4. Record Sessions
+
+- **Press Enter** in watch mode to start recording
+- **Press Enter** again to stop and process the session
+- **Ctrl+C** to exit watch mode
+
+## 🎬 How Watch Mode Works
+
+Watch mode uses a state machine with three states:
+
+| State | Description |
+|-------|-------------|
+| **IDLE** | Monitoring traffic, waiting for you to start a session |
+| **RECORDING** | Capturing traffic with session ID injection |
+| **PROCESSING** | Auto-extracting, merging, and splitting session data |
+
+### Example Session
+
+```
+$ cci watch
+
+╭─────────────────────────╮
+│   CCI Watch Mode        │
+│ Continuous Capture      │
+╰─────────────────────────╯
+
+  Proxy Port:    9090
+  Output Dir:    ./traces
+  Global Log:    traces/all_captured_20251203_220000.jsonl
+
+Configure your application:
+  export HTTP_PROXY=http://127.0.0.1:9090
+  export HTTPS_PROXY=http://127.0.0.1:9090
+  export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
+
+● [IDLE] Monitoring on :9090... Logging to all_captured_20251203_220000.jsonl
+  Press [Enter] to START Session 1
+<Enter>
+
+◉ [REC] Session 01_session_20251203_223010 is recording...
+  Press [Enter] to STOP & PROCESS
+<Enter>
+
+⏳ [BUSY] Processing Session 01_session_20251203_223010...
+  ✔ Saved to traces/01_session_20251203_223010/
+
+● [IDLE] Monitoring on :9090... Logging to all_captured_20251203_220000.jsonl
+  Press [Enter] to START Session 2
+```
+
+### Output Structure
+
+```text
+./traces/                                    # Root output directory
+├── all_captured_20251203_220000.jsonl       # Global log (all traffic)
+│
+├── 01_session_20251203_223010/              # Session 01 folder
+│   ├── raw.jsonl                            # Clean session data
+│   ├── merged.jsonl                         # Merged conversations
+│   └── split_output/                        # Individual files
+│       ├── 001_request_2025-12-03_22-30-10.json
+│       └── 001_response_2025-12-03_22-30-10.json
+│
+├── 02_session_20251203_224500/              # Session 02 folder
+└── ...
+```
 
 ## 📋 CLI Reference
 
-### `cci capture`
+### `cci watch`
 
-Start the proxy server and capture traffic.
+Start watch mode for continuous session capture (recommended).
 
 ```bash
-cci capture [OPTIONS]
+cci watch [OPTIONS]
 
 Options:
-  -p, --port INTEGER     Proxy server port (default: 8080)
-  -h, --host TEXT        Proxy server host (default: 127.0.0.1)
-  -o, --output PATH      Output file path (default: cci_trace.jsonl)
-  --debug                Enable debug mode with verbose logging
-  -i, --include TEXT     Additional URL patterns to include (regex)
-  -e, --exclude TEXT     URL patterns to exclude (regex)
+  -p, --port INTEGER       Proxy server port (default: 9090)
+  -o, --output-dir PATH    Root output directory (default: ./traces)
+  -i, --include TEXT       Additional URL patterns to include (regex)
+  --debug                  Enable debug mode with verbose logging
 ```
 
 **Examples:**
 
 ```bash
-# Basic capture
-cci capture
+# Basic watch mode
+cci watch
 
-# Custom port and output
-cci capture --port 9090 --output api_calls.jsonl
+# Custom port and output directory
+cci watch --port 8888 --output-dir ./my_traces
 
-# Debug mode with custom filters
-cci capture --debug --include ".*my-api\.com.*" --exclude ".*health.*"
-```
-
-### `cci merge`
-
-Merge streaming response chunks into complete records.
-
-```bash
-cci merge --input <file> --output <file>
-
-Options:
-  -i, --input PATH   Input JSONL file with raw streaming chunks [required]
-  -o, --output PATH  Output JSONL file for merged records [required]
-```
-
-**Example:**
-
-```bash
-cci merge --input raw_trace.jsonl --output conversations.jsonl
-```
-
-### `cci split`
-
-Split merged JSONL into individual text files for analysis.
-
-```bash
-cci split --input <file> --output-dir <directory>
-
-Options:
-  -i, --input PATH       Input merged JSONL file [required]
-  -o, --output-dir PATH  Output directory for split files (default: ./split_output)
-```
-
-**Example:**
-
-```bash
-cci split --input merged.jsonl --output-dir ./analysis
+# Include custom API endpoint
+cci watch --include ".*my-custom-api\.com.*"
 ```
 
 ### `cci config`
@@ -218,12 +189,9 @@ cci split --input merged.jsonl --output-dir ./analysis
 Display configuration and setup help.
 
 ```bash
-cci config [OPTIONS]
-
-Options:
-  --cert-help    Show certificate installation instructions
-  --proxy-help   Show proxy configuration instructions
-  --show         Show current configuration
+cci config --cert-help    # Certificate installation instructions
+cci config --proxy-help   # Proxy configuration instructions
+cci config --show         # Show current configuration
 ```
 
 ### `cci stats`
@@ -231,134 +199,7 @@ Options:
 Display statistics for a captured trace file.
 
 ```bash
-cci stats <file>
-```
-
-**Example:**
-
-```bash
-cci stats my_trace.jsonl
-```
-
-## 📄 Output Format
-
-CCI produces JSONL (JSON Lines) files with the following record types:
-
-### Request Record
-
-```json
-{
-  "type": "request",
-  "id": "uuid-req-001",
-  "timestamp": "2024-11-25T10:00:00Z",
-  "method": "POST",
-  "url": "https://api.anthropic.com/v1/messages",
-  "headers": {"content-type": "application/json"},
-  "body": {"model": "claude-3-sonnet", "messages": [...]}
-}
-```
-
-### Response Chunk (Streaming)
-
-```json
-{
-  "type": "response_chunk",
-  "request_id": "uuid-req-001",
-  "timestamp": "2024-11-25T10:00:01Z",
-  "status_code": 200,
-  "chunk_index": 0,
-  "content": {"type": "content_block_delta", "delta": {"text": "Hello"}}
-}
-```
-
-### Response Meta
-
-```json
-{
-  "type": "response_meta",
-  "request_id": "uuid-req-001",
-  "total_latency_ms": 1500,
-  "status_code": 200,
-  "total_chunks": 42
-}
-```
-
-### Non-Streaming Response
-
-```json
-{
-  "type": "response",
-  "request_id": "uuid-req-001",
-  "timestamp": "2024-11-25T10:00:01Z",
-  "status_code": 200,
-  "headers": {...},
-  "body": {...},
-  "latency_ms": 1500
-}
-```
-
-### Merged Record (after `cci merge`)
-
-```json
-{
-  "request_id": "uuid-req-001",
-  "timestamp": "2024-11-25T10:00:00Z",
-  "method": "POST",
-  "url": "https://api.anthropic.com/v1/messages",
-  "request_body": {...},
-  "response_status": 200,
-  "response_text": "Hello! How can I help you today?",
-  "total_latency_ms": 1500,
-  "chunk_count": 42
-}
-```
-
-## ⚙️ Configuration
-
-CCI can be configured via TOML/YAML files or environment variables.
-
-### Configuration File
-
-Create `cci.toml` in your current directory or `~/.config/cci/config.toml`:
-
-```toml
-[proxy]
-host = "127.0.0.1"
-port = 8080
-ssl_insecure = false
-
-[filter]
-include_patterns = [
-    ".*api\\.anthropic\\.com.*",
-    ".*api\\.openai\\.com.*",
-    ".*generativelanguage\\.googleapis\\.com.*",
-]
-exclude_patterns = []
-
-[masking]
-mask_auth_headers = true
-sensitive_headers = ["authorization", "x-api-key", "api-key"]
-sensitive_body_fields = []
-mask_pattern = "***MASKED***"
-
-[storage]
-output_file = "cci_trace.jsonl"
-pretty_json = false
-max_file_size_mb = 0  # 0 = no rotation
-
-[logging]
-level = "INFO"
-log_file = ""  # optional file path
-```
-
-### Environment Variables
-
-```bash
-CCI_PROXY_HOST=127.0.0.1
-CCI_PROXY_PORT=8080
-CCI_OUTPUT_FILE=my_trace.jsonl
-CCI_LOG_LEVEL=DEBUG
-CCI_INCLUDE_PATTERNS=.*my-api\.com.*,.*other-api\.com.*
+cci stats traces/01_session_xxx/raw.jsonl
 ```
 
 ## 🔧 Supported LLM Providers
@@ -376,74 +217,36 @@ CCI is pre-configured to capture traffic from:
 | Cohere | `api.cohere.ai` |
 | DeepSeek | `api.deepseek.com` |
 
-Add custom providers with `--include` or in the config file.
+Add custom providers with `--include`:
+```bash
+cci watch --include ".*my-custom-api\.com.*"
+```
 
 ## 🐛 Troubleshooting
 
-### SSL Handshake Error
+### SSL Certificate Error
 
 **Problem:** `SSL: CERTIFICATE_VERIFY_FAILED`
 
-**Solution:**
-1. Ensure the mitmproxy CA certificate is installed
-2. Run `cci config --cert-help` for instructions
-3. For testing, some tools support `--insecure` or `verify=False`
+**Solution:** Install the mitmproxy CA certificate. Run `cci config --cert-help` for instructions.
 
-### Node.js Apps Not Working (Claude Code, Cursor, etc.)
+### Node.js Apps Not Working
 
-**Problem:** Requests hang or timeout when using Claude Code or other Node.js-based tools
+**Problem:** Requests hang or timeout when using Claude Code, Cursor, etc.
 
-**Solution:**
-Node.js requires the `NODE_EXTRA_CA_CERTS` environment variable to trust custom CA certificates:
-
+**Solution:** Set the `NODE_EXTRA_CA_CERTS` environment variable:
 ```bash
 export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
 ```
-
-Make sure all three variables are set:
-```bash
-export HTTP_PROXY=http://127.0.0.1:8080
-export HTTPS_PROXY=http://127.0.0.1:8080
-export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
-```
-
-### Proxy Connection Refused
-
-**Problem:** `Connection refused` when connecting through proxy
-
-**Solution:**
-1. Ensure CCI is running: `cci capture`
-2. Check the port is correct: `--port 8080`
-3. Check firewall settings
 
 ### No Traffic Captured
 
-**Problem:** CCI is running but no requests are logged
+**Problem:** Watch mode is running but no requests are logged
 
 **Solution:**
-1. Verify proxy environment variables are set:
-   ```bash
-   echo $HTTP_PROXY $HTTPS_PROXY
-   ```
-2. Check URL filter patterns match your API:
-   ```bash
-   cci config --show
-   ```
-3. Add custom include pattern:
-   ```bash
-   cci capture --include ".*your-api\.com.*"
-   ```
-
-### High Memory Usage with Long Sessions
-
-**Problem:** Memory grows during long capture sessions
-
-**Solution:**
-Configure log rotation in `cci.toml`:
-```toml
-[storage]
-max_file_size_mb = 100
-```
+1. Verify proxy environment variables are set correctly
+2. Make sure the URL matches the default patterns (or add `--include`)
+3. Check `cci config --show` to see current filter patterns
 
 ## 📜 License
 
@@ -457,4 +260,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - GitHub Issues: [Report a bug](https://github.com/chouzz/claude-code-inspector/issues)
 - Documentation: [Read the docs](https://github.com/chouzz/claude-code-inspector#readme)
-
