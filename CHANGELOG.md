@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-12-09
+
+### Added
+
+- **React Web UI** - Modern web interface for trace analysis
+  - Beautiful dark/light theme with toggle support
+  - Session list with timestamp-based sorting
+  - Conversation view with system prompts, messages, and tool calls
+  - Multiple view tabs: Chat, System, Tools, and Raw JSON
+  - Automatic API format detection (Anthropic/OpenAI)
+  - Real-time session updates via polling
+- **FastAPI server** - Backend API for serving UI and session data
+  - RESTful endpoints for sessions and session details
+  - Static file serving for bundled React app
+- **UI auto-launch** - `cci watch` now automatically starts the UI server (default: enabled)
+- **Build script** - `build_ui.py` for building frontend assets
+
+### Changed
+
+- **GitHub Actions** - Updated CI/CD workflows to build frontend UI before packaging
+- **Dependencies** - Added `fastapi`, `uvicorn`, `python-multipart`, `watchdog`
+
+---
+
 ## [1.2.0] - 2025-12-09
 
 ### Added
