@@ -24,7 +24,8 @@ import {
   Check,
   Copy,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  WrapText
 } from 'lucide-react';
 import type { Session, NormalizedMessage, NormalizedTool, SessionSummary, AnnotationData } from './types';
 import { normalizeSession, formatTimestamp } from './utils';
@@ -156,8 +157,8 @@ const safeJSONStringify = (value: any, space = 2) => {
 
 // --- Sub-components ---
 
-const JSONViewer: React.FC<{ data: any }> = ({ data }) => (
-  <pre className="text-xs font-mono bg-gray-50 dark:bg-black/40 p-4 rounded overflow-auto max-h-[600px] text-green-700 dark:text-green-400 border border-gray-200 dark:border-gray-800 custom-scrollbar">
+const JSONViewer: React.FC<{ data: any; wrap?: boolean }> = ({ data, wrap = false }) => (
+  <pre className={`text-xs font-mono bg-gray-50 dark:bg-black/40 p-4 rounded overflow-auto max-h-[600px] text-green-700 dark:text-green-400 border border-gray-200 dark:border-gray-800 custom-scrollbar ${wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'}`}>
     {safeJSONStringify(data)}
   </pre>
 );
@@ -396,6 +397,7 @@ const App: React.FC = () => {
   const [editingSessionNote, setEditingSessionNote] = useState<string | null>(null);
   const [editingRequestNote, setEditingRequestNote] = useState<string | null>(null);
   const [chatScrollEdges, setChatScrollEdges] = useState({ atTop: true, atBottom: true });
+  const [isJsonWrapped, setIsJsonWrapped] = useState(false);
 
   // --- Annotation API ---
 
@@ -1174,7 +1176,17 @@ const App: React.FC = () => {
 
                   {/* Raw JSON View */}
                   {activeTab === 'raw' && (
-                    <div className="grid grid-cols-2 gap-6 h-full">
+                    <div className="flex flex-col h-full">
+                      <div className="flex justify-end mb-4">
+                        <button
+                          onClick={() => setIsJsonWrapped(prev => !prev)}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition"
+                        >
+                          <WrapText size={14} />
+                          {isJsonWrapped ? '关闭换行' : '自动换行'}
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-6 h-full">
                       <div className="flex flex-col h-full overflow-hidden">
                         <div className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-3 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2">
@@ -1186,7 +1198,7 @@ const App: React.FC = () => {
                             )}
                         </div>
                         <div className="flex-1 overflow-hidden rounded-lg shadow-inner border border-gray-200 dark:border-transparent">
-                            <JSONViewer data={currentExchange.rawRequest} />
+                            <JSONViewer data={currentExchange.rawRequest} wrap={isJsonWrapped} />
                         </div>
                       </div>
                       <div className="flex flex-col h-full overflow-hidden">
@@ -1201,7 +1213,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="flex-1 overflow-hidden rounded-lg shadow-inner border border-gray-200 dark:border-transparent">
                             {currentExchange.rawResponse ? (
-                            <JSONViewer data={currentExchange.rawResponse} />
+                            <JSONViewer data={currentExchange.rawResponse} wrap={isJsonWrapped} />
                             ) : (
                             <div className="h-full p-4 bg-gray-50 dark:bg-slate-900/30 border border-gray-200 dark:border-slate-800 rounded text-slate-500 text-xs font-mono flex items-center justify-center">
                                 Response file missing or corrupt
@@ -1209,6 +1221,7 @@ const App: React.FC = () => {
                             )}
                         </div>
                       </div>
+                    </div>
                     </div>
                   )}
 
