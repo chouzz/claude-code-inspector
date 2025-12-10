@@ -6,6 +6,7 @@ Serves the React frontend and provides API endpoints for session data.
 
 import json
 import logging
+import mimetypes
 from datetime import datetime
 from pathlib import Path
 
@@ -18,6 +19,14 @@ from cci.watch import WatchManager
 
 # Get logger
 logger = logging.getLogger("cci.server")
+
+
+def _ensure_static_mime_types():
+    """Force correct MIME types for static assets (especially on Windows)."""
+    mimetypes.add_type("application/javascript", ".js")
+    mimetypes.add_type("text/javascript", ".js")
+    mimetypes.add_type("text/css", ".css")
+    mimetypes.add_type("image/svg+xml", ".svg")
 
 
 class SessionSummary(BaseModel):
@@ -195,6 +204,9 @@ def create_app(watch_manager: WatchManager) -> FastAPI:
         except Exception as e:
             logger.error(f"Error saving annotations for {session_id}: {e}")
             raise HTTPException(status_code=500, detail="Failed to save annotations") from e
+
+    # Ensure consistent MIME type mappings before serving static assets
+    _ensure_static_mime_types()
 
     # Serve static files (React UI)
     # The static directory should be adjacent to this file in the package

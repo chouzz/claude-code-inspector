@@ -15,6 +15,39 @@ const isOpenAIFormat = (body: any): boolean => {
 };
 
 /**
+ * Normalize provider-specific token usage stats into {input_tokens, output_tokens}.
+ */
+const normalizeUsageMetrics = (rawUsage: any) => {
+  if (!rawUsage || typeof rawUsage !== 'object') {
+    return undefined;
+  }
+
+  const safeNumber = (value: any): number | undefined =>
+    typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+  let input = safeNumber(rawUsage.input_tokens ?? rawUsage.prompt_tokens);
+  let output = safeNumber(rawUsage.output_tokens ?? rawUsage.completion_tokens);
+  const total = safeNumber(rawUsage.total_tokens);
+
+  if (input === undefined && output === undefined && total === undefined) {
+    return undefined;
+  }
+
+  if (input === undefined && total !== undefined && output !== undefined) {
+    input = Math.max(total - output, 0);
+  }
+
+  if (output === undefined && total !== undefined && input !== undefined) {
+    output = Math.max(total - input, 0);
+  }
+
+  return {
+    input_tokens: input ?? total ?? 0,
+    output_tokens: output ?? 0,
+  };
+};
+
+/**
  * Normalizes an OpenAI-style request body into our standard format.
  */
 const normalizeOpenAIRequest = (body: any): { system: string | undefined, messages: NormalizedMessage[], tools: NormalizedTool[], model: string } => {
@@ -150,7 +183,7 @@ export const normalizeSession = (details: SessionDetails): Session => {
     // --- Normalization Logic ---
     let normalized;
     let responseContent = rawResponse?.body;
-    let usage = rawResponse?.body?.usage;
+    let usageData = rawResponse?.body?.usage;
 
     try {
         if (isOpenAIFormat(rawRequest.body)) {
@@ -182,7 +215,7 @@ export const normalizeSession = (details: SessionDetails): Session => {
                   responseContent = choice.message.content;
                }
             }
-            usage = rawResponse.body.usage;
+            usageData = rawResponse.body.usage;
           }
 
         } else {
@@ -191,7 +224,7 @@ export const normalizeSession = (details: SessionDetails): Session => {
           if (rawResponse?.body) {
             // Anthropic content is usually at body.content or body itself if simple
             responseContent = rawResponse.body.content || rawResponse.body;
-            usage = rawResponse.body.usage;
+            usageData = rawResponse.body.usage;
           }
         }
         
@@ -211,7 +244,7 @@ export const normalizeSession = (details: SessionDetails): Session => {
           messages,
           tools,
           responseContent,
-          usage,
+          usage: normalizeUsageMetrics(usageData),
           rawRequest,
           rawResponse
         };
