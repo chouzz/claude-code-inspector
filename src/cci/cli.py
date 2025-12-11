@@ -616,19 +616,17 @@ def _run_watch_loop(watch_manager: WatchManager, stop_event: threading.Event) ->
         state = watch_manager.state
 
         if state == WatchState.IDLE:
-            # Display IDLE prompt
-            console.print(
-                f"[bold green]●[/] [green][IDLE][/] Monitoring on :{watch_manager.port}... "
-                f"Logging to [cyan]{watch_manager.global_log_path.name}[/]"
-            )
-            console.print(
-                f"  [dim]Press [Enter] to START Session {watch_manager.next_session_id}[/]"
+            # Display IDLE status with spinner pinned at bottom
+            idle_status_text = (
+                f"[bold green]●[/] [green][IDLE][/] Monitoring on :{watch_manager.port}  "
+                f"[dim]Press [Enter] to START Session {watch_manager.next_session_id}[/]"
             )
 
-            try:
-                input()
-            except EOFError:
-                break
+            with console.status(idle_status_text, spinner="dots", spinner_style="green"):
+                try:
+                    input()
+                except EOFError:
+                    break
 
             if stop_event.is_set():
                 break
@@ -637,18 +635,55 @@ def _run_watch_loop(watch_manager: WatchManager, stop_event: threading.Event) ->
             try:
                 session = watch_manager.start_recording()
                 session_id = session.session_id
-                console.print(
-                    f"\n[bold red]◉[/] [red][REC][/] Session [bold]{session_id}[/] is recording..."
+
+                # Display RECORDING status with spinner pinned at bottom
+                rec_status_text = (
+                    f"[bold red]◉[/] [red][REC][/] Session [bold]{session_id}[/] recording  "
+                    f"[dim]Press [Enter] to STOP & PROCESS[/]"
                 )
-                console.print("  [dim]Press [Enter] to STOP & PROCESS[/]")
+
+                with console.status(rec_status_text, spinner="point", spinner_style="red"):
+                    try:
+                        input()
+                    except EOFError:
+                        break
+
+                if stop_event.is_set():
+                    break
+
+                # Stop recording and process
+                session = watch_manager.stop_recording()
+                console.print(
+                    f"\n[bold yellow]⏳[/] [yellow][BUSY][/] Processing "
+                    f"Session [bold]{session_id}[/]..."
+                )
+
+                # Process the session
+                session_dir = watch_manager.process_session(session)
+                console.print(f"  [green]✔[/] Saved to [cyan]{session_dir}/[/]")
+                console.print()
+
             except RuntimeError as e:
-                console.print(f"[red]Error starting recording:[/] {e}")
+                console.print(f"[red]Error:[/] {e}")
 
         elif state == WatchState.RECORDING:
-            try:
-                input()
-            except EOFError:
-                break
+            # This branch handles the case where we enter the loop already in RECORDING state
+            # (e.g., after an error or unexpected state transition)
+            session_id = (
+                watch_manager.current_session.session_id
+                if watch_manager.current_session
+                else "?"
+            )
+            rec_status_text = (
+                f"[bold red]◉[/] [red][REC][/] Session [bold]{session_id}[/] recording  "
+                f"[dim]Press [Enter] to STOP & PROCESS[/]"
+            )
+
+            with console.status(rec_status_text, spinner="point", spinner_style="red"):
+                try:
+                    input()
+                except EOFError:
+                    break
 
             if stop_event.is_set():
                 break
