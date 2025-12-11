@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
@@ -24,12 +23,14 @@ from cci.config import get_cert_info, load_config
 if TYPE_CHECKING:
     from cci.config import CCIConfig
     from cci.watch import WatchManager
-from cci.logger import setup_logger
+
+# Import shared console and logger utilities from the central logger module.
+# Using a single console instance ensures Rich can properly manage terminal output,
+# especially for features like `console.status()` that pin content at the bottom.
+from cci.logger import console, setup_logger, silence_noisy_loggers
 from cci.merger import merge_streams
 from cci.splitter import split_records
 from cci.storage import count_records
-
-console = Console()
 
 
 @click.group()
@@ -448,8 +449,13 @@ def watch(
     if debug:
         config.logging.level = "DEBUG"
 
-    # Setup logging
+    # Setup logging with Rich integration
+    # This configures both CCI logger and root logger to use RichHandler,
+    # ensuring all output goes through Rich and doesn't break the status spinner.
     setup_logger(config.logging.level, config.logging.log_file)
+
+    # Silence noisy third-party loggers to keep terminal output clean
+    silence_noisy_loggers()
 
     # Check certificate
     cert_info = get_cert_info()

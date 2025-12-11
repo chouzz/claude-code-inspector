@@ -2,19 +2,34 @@
 Logging configuration for Claude-Code-Inspector.
 
 Implements a tiered logging system with INFO, DEBUG, and ERROR levels.
+Provides a shared Rich Console instance for consistent terminal output.
 """
 
 import logging
+import sys
 from pathlib import Path
 
 from rich.console import Console
 from rich.logging import RichHandler
 
-# Create console for rich output
-console = Console(stderr=True)
+# =============================================================================
+# SHARED CONSOLE INSTANCE
+# =============================================================================
+# This is the SINGLE console instance that should be used throughout the entire
+# application. Using a single instance ensures that Rich can properly manage
+# terminal output, especially when using features like `console.status()` that
+# need to pin content at the bottom of the terminal.
+#
+# The console is configured with:
+# - force_terminal=True: Ensures Rich features work even in non-TTY environments
+# - stderr=False: Output to stdout for consistency with status spinners
+console = Console(force_terminal=True)
 
 # Custom logger name
 LOGGER_NAME = "cci"
+
+# Flag to track if root logger has been configured
+_root_logger_configured = False
 
 
 def setup_logger(
@@ -25,6 +40,10 @@ def setup_logger(
     """
     Set up the CCI logger with the specified configuration.
 
+    This function also configures the root logger to use RichHandler,
+    ensuring that ALL logging output (including from third-party libraries)
+    goes through Rich and doesn't break the terminal layout.
+
     Args:
         level: Log level (DEBUG, INFO, WARNING, ERROR)
         log_file: Optional file path for log output
@@ -33,10 +52,20 @@ def setup_logger(
     Returns:
         Configured logger instance
     """
-    logger = logging.getLogger(LOGGER_NAME)
-    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+    global _root_logger_configured
 
-    # Clear existing handlers
+    log_level = getattr(logging, level.upper(), logging.INFO)
+
+    # Configure root logger ONCE to capture all third-party library logs
+    if not _root_logger_configured:
+        _configure_root_logger(log_level)
+        _root_logger_configured = True
+
+    # Configure CCI logger
+    logger = logging.getLogger(LOGGER_NAME)
+    logger.setLevel(log_level)
+
+    # Clear existing handlers (avoid duplicates on re-init)
     logger.handlers.clear()
 
     # Rich console handler for pretty terminal output
@@ -46,8 +75,9 @@ def setup_logger(
         show_path=False,
         rich_tracebacks=True,
         tracebacks_show_locals=level.upper() == "DEBUG",
+        markup=True,  # Enable Rich markup in log messages
     )
-    rich_handler.setLevel(getattr(logging, level.upper(), logging.INFO))
+    rich_handler.setLevel(log_level)
     logger.addHandler(rich_handler)
 
     # File handler if specified
@@ -60,7 +90,101 @@ def setup_logger(
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
+    # Don't propagate to root logger (we handle our own output)
+    logger.propagate = False
+
     return logger
+
+
+def _configure_root_logger(level: int) -> None:
+    """
+    Configure the root logger to use RichHandler.
+
+    This ensures that ALL logging output from any library goes through Rich,
+    preventing raw log output from breaking the terminal layout when using
+    features like `console.status()`.
+    """
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+
+    # Remove any existing handlers
+    root_logger.handlers.clear()
+
+    # Add RichHandler to root logger
+    root_handler = RichHandler(
+        console=console,
+        show_time=True,
+        show_path=False,
+        rich_tracebacks=True,
+        markup=True,
+    )
+    root_handler.setLevel(level)
+    root_logger.addHandler(root_handler)
+
+
+def silence_noisy_loggers() -> None:
+    """
+    Silence verbose third-party library loggers.
+
+    Call this function after setup_logger() to suppress noisy logs from
+    libraries like uvicorn, mitmproxy, urllib3, etc. that would otherwise
+    clutter the terminal output.
+    """
+    noisy_loggers = [
+        # Web servers
+        "uvicorn",
+        "uvicorn.access",
+        "uvicorn.error",
+        "werkzeug",
+        "fastapi",
+        # HTTP libraries
+        "urllib3",
+        "urllib3.connectionpool",
+        "httpx",
+        "httpcore",
+        "requests",
+        # Proxy / MITM
+        "mitmproxy",
+        "mitmproxy.proxy",
+        "mitmproxy.proxy.server",
+        # Async
+        "asyncio",
+        "concurrent.futures",
+        # Watchdog
+        "watchdog",
+        "watchdog.observers",
+    ]
+
+    for logger_name in noisy_loggers:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+
+
+def redirect_stdout_to_rich() -> None:
+    """
+    Redirect stdout to go through Rich console.
+
+    This captures raw print() calls from third-party libraries and routes them
+    through the Rich console, preventing them from breaking the terminal layout.
+
+    Note: This is a more aggressive approach and may have side effects.
+    Use only if silence_noisy_loggers() is not sufficient.
+    """
+
+    class RichStdoutWriter:
+        """A file-like object that redirects writes to Rich console."""
+
+        def write(self, text: str) -> int:
+            if text and text.strip():
+                console.print(text, end="", highlight=False)
+            return len(text)
+
+        def flush(self) -> None:
+            pass
+
+        def isatty(self) -> bool:
+            return True
+
+    sys.stdout = RichStdoutWriter()  # type: ignore[assignment]
 
 
 def get_logger() -> logging.Logger:
