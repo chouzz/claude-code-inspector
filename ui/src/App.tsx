@@ -320,33 +320,12 @@ const ChatBubble: React.FC<{ message: NormalizedMessage }> = ({ message }) => {
   );
 };
 
-const ToolDefinition: React.FC<{ tool: NormalizedTool; onVisibilityChange?: (toolName: string, isVisible: boolean) => void }> = ({ tool, onVisibilityChange }) => {
+const ToolDefinition: React.FC<{ tool: NormalizedTool }> = ({ tool }) => {
   const [expanded, setExpanded] = useState(false);
-  const toolRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
-
-  // Report visibility changes to parent for sticky header
-  useEffect(() => {
-    if (!expanded || !toolRef.current || !onVisibilityChange) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          // We check if the tool content is visible but the header might be scrolled out
-          onVisibilityChange(tool.name, entry.isIntersecting);
-        });
-      },
-      { threshold: [0, 0.1, 0.5, 1], rootMargin: '-60px 0px 0px 0px' } // Account for header height
-    );
-
-    observer.observe(toolRef.current);
-    return () => observer.disconnect();
-  }, [expanded, tool.name, onVisibilityChange]);
 
   return (
-    <div ref={toolRef} data-tool-name={tool.name} className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-slate-900 mb-3 overflow-hidden transition-all hover:border-gray-300 dark:hover:border-gray-700 shadow-sm">
+    <div data-tool-name={tool.name} className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-slate-900 overflow-hidden transition-all hover:border-gray-300 dark:hover:border-gray-700 shadow-sm">
        <div
-        ref={headerRef}
         className="tool-header px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition"
         onClick={() => setExpanded(!expanded)}
        >
@@ -376,21 +355,6 @@ const ToolDefinition: React.FC<{ tool: NormalizedTool; onVisibilityChange?: (too
   )
 }
 
-// Sticky Tool Header component for Tools view
-const StickyToolHeader: React.FC<{ toolName: string | null }> = ({ toolName }) => {
-  if (!toolName) return null;
-
-  return (
-    <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-orange-200 dark:border-orange-900/50 px-4 py-2 flex items-center gap-3 shadow-sm">
-      <div className="p-1.5 bg-orange-100 dark:bg-orange-950/50 rounded text-orange-600 dark:text-orange-400">
-        <Box size={14} />
-      </div>
-      <span className="font-mono font-bold text-sm text-slate-700 dark:text-orange-100">{toolName}</span>
-      <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-2">(currently viewing)</span>
-    </div>
-  );
-}
-
 // Tools list with sticky header support
 const ToolsList: React.FC<{ tools: NormalizedTool[]; scrollContainerRef: React.RefObject<HTMLDivElement | null> }> = ({ tools, scrollContainerRef }) => {
   const [stickyToolName, setStickyToolName] = useState<string | null>(null);
@@ -403,8 +367,8 @@ const ToolsList: React.FC<{ tools: NormalizedTool[]; scrollContainerRef: React.R
 
     const handleScroll = () => {
       const toolElements = toolsContainer.querySelectorAll('[data-tool-name]');
-      const headerHeight = 60; // Height of the main header
-      const stickyHeaderHeight = 44; // Height of the sticky tool header
+      // Account for the header (57px) + content padding (24px) + some buffer
+      const viewportTop = 90;
 
       let currentTool: string | null = null;
 
@@ -419,9 +383,8 @@ const ToolsList: React.FC<{ tools: NormalizedTool[]; scrollContainerRef: React.R
         const contentRect = toolContent.getBoundingClientRect();
 
         // Check if this tool's content is visible but its header is scrolled out of view
-        // The tool header is considered "out of view" when its bottom is above the header area
-        const headerIsAboveViewport = headerRect.bottom < headerHeight + stickyHeaderHeight;
-        const contentIsVisible = contentRect.top < scrollContainer.clientHeight && contentRect.bottom > headerHeight + stickyHeaderHeight;
+        const headerIsAboveViewport = headerRect.bottom < viewportTop;
+        const contentIsVisible = contentRect.bottom > viewportTop && contentRect.top < window.innerHeight;
 
         if (headerIsAboveViewport && contentIsVisible) {
           currentTool = toolName;
@@ -439,8 +402,19 @@ const ToolsList: React.FC<{ tools: NormalizedTool[]; scrollContainerRef: React.R
 
   return (
     <div ref={toolsContainerRef} className="relative">
-      <StickyToolHeader toolName={stickyToolName} />
-      <div className="grid gap-4">
+      {/* Sticky Tool Name Header - positioned absolutely within the scrollable area */}
+      {stickyToolName && (
+        <div className="sticky top-0 z-10 -mx-6 px-6 -mt-6 pt-2 pb-2 mb-4 bg-gradient-to-b from-white via-white to-white/80 dark:from-[#0f172a] dark:via-[#0f172a] dark:to-[#0f172a]/80">
+          <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/50 rounded-lg shadow-sm">
+            <div className="p-1 bg-orange-100 dark:bg-orange-900/50 rounded text-orange-600 dark:text-orange-400">
+              <Box size={12} />
+            </div>
+            <span className="font-mono font-semibold text-sm text-orange-700 dark:text-orange-300">{stickyToolName}</span>
+            <ChevronDown size={12} className="text-orange-400 dark:text-orange-500" />
+          </div>
+        </div>
+      )}
+      <div className="grid gap-3">
         {tools.map((tool, i) => (
           <ToolDefinition key={i} tool={tool} />
         ))}
