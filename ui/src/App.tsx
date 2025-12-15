@@ -320,13 +320,34 @@ const ChatBubble: React.FC<{ message: NormalizedMessage }> = ({ message }) => {
   );
 };
 
-const ToolDefinition: React.FC<{ tool: NormalizedTool }> = ({ tool }) => {
+const ToolDefinition: React.FC<{ tool: NormalizedTool; onVisibilityChange?: (toolName: string, isVisible: boolean) => void }> = ({ tool, onVisibilityChange }) => {
   const [expanded, setExpanded] = useState(false);
+  const toolRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // Report visibility changes to parent for sticky header
+  useEffect(() => {
+    if (!expanded || !toolRef.current || !onVisibilityChange) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          // We check if the tool content is visible but the header might be scrolled out
+          onVisibilityChange(tool.name, entry.isIntersecting);
+        });
+      },
+      { threshold: [0, 0.1, 0.5, 1], rootMargin: '-60px 0px 0px 0px' } // Account for header height
+    );
+
+    observer.observe(toolRef.current);
+    return () => observer.disconnect();
+  }, [expanded, tool.name, onVisibilityChange]);
 
   return (
-    <div className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-slate-900 mb-3 overflow-hidden transition-all hover:border-gray-300 dark:hover:border-gray-700 shadow-sm">
+    <div ref={toolRef} data-tool-name={tool.name} className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-slate-900 mb-3 overflow-hidden transition-all hover:border-gray-300 dark:hover:border-gray-700 shadow-sm">
        <div
-        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition"
+        ref={headerRef}
+        className="tool-header px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition"
         onClick={() => setExpanded(!expanded)}
        >
          <div className="flex items-center gap-3">
@@ -338,7 +359,7 @@ const ToolDefinition: React.FC<{ tool: NormalizedTool }> = ({ tool }) => {
          {expanded ? <ChevronDown size={16} className="text-gray-400 dark:text-gray-500"/> : <ChevronRight size={16} className="text-gray-400 dark:text-gray-500"/>}
        </div>
        {expanded && (
-         <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-black/20">
+         <div className="tool-content p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-black/20">
             {tool.description && (
               <div className="mb-4 text-sm text-slate-600 dark:text-gray-400 italic bg-white dark:bg-slate-900 p-3 rounded border-l-2 border-gray-300 dark:border-gray-700 whitespace-pre-wrap break-words">
                 {tool.description}
@@ -353,6 +374,79 @@ const ToolDefinition: React.FC<{ tool: NormalizedTool }> = ({ tool }) => {
        )}
     </div>
   )
+}
+
+// Sticky Tool Header component for Tools view
+const StickyToolHeader: React.FC<{ toolName: string | null }> = ({ toolName }) => {
+  if (!toolName) return null;
+
+  return (
+    <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border-b border-orange-200 dark:border-orange-900/50 px-4 py-2 flex items-center gap-3 shadow-sm">
+      <div className="p-1.5 bg-orange-100 dark:bg-orange-950/50 rounded text-orange-600 dark:text-orange-400">
+        <Box size={14} />
+      </div>
+      <span className="font-mono font-bold text-sm text-slate-700 dark:text-orange-100">{toolName}</span>
+      <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-2">(currently viewing)</span>
+    </div>
+  );
+}
+
+// Tools list with sticky header support
+const ToolsList: React.FC<{ tools: NormalizedTool[]; scrollContainerRef: React.RefObject<HTMLDivElement | null> }> = ({ tools, scrollContainerRef }) => {
+  const [stickyToolName, setStickyToolName] = useState<string | null>(null);
+  const toolsContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    const toolsContainer = toolsContainerRef.current;
+    if (!scrollContainer || !toolsContainer) return;
+
+    const handleScroll = () => {
+      const toolElements = toolsContainer.querySelectorAll('[data-tool-name]');
+      const headerHeight = 60; // Height of the main header
+      const stickyHeaderHeight = 44; // Height of the sticky tool header
+
+      let currentTool: string | null = null;
+
+      toolElements.forEach((el) => {
+        const toolName = el.getAttribute('data-tool-name');
+        const toolHeader = el.querySelector('.tool-header');
+        const toolContent = el.querySelector('.tool-content');
+
+        if (!toolHeader || !toolContent || !toolName) return;
+
+        const headerRect = toolHeader.getBoundingClientRect();
+        const contentRect = toolContent.getBoundingClientRect();
+
+        // Check if this tool's content is visible but its header is scrolled out of view
+        // The tool header is considered "out of view" when its bottom is above the header area
+        const headerIsAboveViewport = headerRect.bottom < headerHeight + stickyHeaderHeight;
+        const contentIsVisible = contentRect.top < scrollContainer.clientHeight && contentRect.bottom > headerHeight + stickyHeaderHeight;
+
+        if (headerIsAboveViewport && contentIsVisible) {
+          currentTool = toolName;
+        }
+      });
+
+      setStickyToolName(currentTool);
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    handleScroll(); // Initial check
+
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, [scrollContainerRef, tools]);
+
+  return (
+    <div ref={toolsContainerRef} className="relative">
+      <StickyToolHeader toolName={stickyToolName} />
+      <div className="grid gap-4">
+        {tools.map((tool, i) => (
+          <ToolDefinition key={i} tool={tool} />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const TABS = [
@@ -1160,11 +1254,7 @@ const App: React.FC = () => {
                          </span>
                        </div>
                        {currentExchange.tools && currentExchange.tools.length > 0 ? (
-                          <div className="grid gap-4">
-                            {currentExchange.tools.map((tool, i) => (
-                              <ToolDefinition key={i} tool={tool} />
-                            ))}
-                          </div>
+                          <ToolsList tools={currentExchange.tools} scrollContainerRef={chatScrollRef} />
                        ) : (
                          <div className="p-12 text-center text-slate-500 border border-dashed border-gray-200 dark:border-slate-800 rounded-xl bg-gray-50 dark:bg-slate-900/20">
                            <Box size={32} className="mx-auto mb-3 opacity-20"/>
