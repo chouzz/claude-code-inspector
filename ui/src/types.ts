@@ -21,7 +21,7 @@ export interface LogRecord {
   status_code?: number;
   method?: string;
   url?: string;
-  body: any;
+  body: unknown;
   latency_ms?: number;
   headers?: Record<string, string>;
 }
@@ -47,7 +47,7 @@ export interface RawRequest {
   method: string;
   url: string;
   headers: Record<string, string>;
-  body: any;
+  body: unknown;
 }
 
 export interface RawResponse {
@@ -56,18 +56,18 @@ export interface RawResponse {
   timestamp: string;
   status_code: number;
   latency_ms: number;
-  body: any;
+  body: unknown;
 }
 
 export interface NormalizedMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string | any[]; // Text or array of content blocks
+  content: unknown; // Provider payloads vary; UI components will narrow as needed
 }
 
 export interface NormalizedTool {
   name: string;
   description?: string;
-  input_schema?: any; // JSON Schema
+  input_schema?: unknown; // JSON Schema
 }
 
 export interface NormalizedExchange {
@@ -83,7 +83,7 @@ export interface NormalizedExchange {
   messages: NormalizedMessage[]; // The conversation context sent TO the model
   tools?: NormalizedTool[]; // Tools defined in the request
 
-  responseContent: any; // The answer FROM the model
+  responseContent: unknown; // The answer FROM the model (provider-dependent)
   usage?: {
     input_tokens: number;
     output_tokens: number;
