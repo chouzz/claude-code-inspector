@@ -211,7 +211,13 @@ export const ExchangeDetailsPane: React.FC<{
             {activeTab === 'tools' && (
               <>
                 {/* Sticky bar: always rendered to avoid layout thrash/flicker while scrolling */}
-                <div className="sticky top-0 z-10 -mx-6 bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-slate-800 shadow-sm">
+                <div
+                  className={`sticky top-0 z-10 -mx-6 bg-white dark:bg-[#0f172a] border-b shadow-sm ${
+                    stickyToolInfo.name
+                      ? 'border-orange-200 dark:border-orange-800/50'
+                      : 'border-gray-200 dark:border-slate-800'
+                  }`}
+                >
                   <div className="px-6">
                     <div className="max-w-4xl mx-auto">
                       <div className="flex items-center justify-between h-12">
