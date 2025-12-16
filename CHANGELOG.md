@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-12-16
+
+### Added
+
+- **Annotation system** - Add annotation support for sessions and requests
+- **UI enhancements**
+  - Favicon and custom page title
+  - Chat scroll buttons for easier navigation
+  - JSON text wrapping toggle in raw view
+  - Auto-select newest session on load
+  - Sticky tool name header for better context awareness
+
+### Fixed
+
+- **Windows compatibility** - Fixed npm build command execution on Windows using `shell=True`
+- **Port conflict detection** - Check if UI port is in use before starting server
+- **Data normalization** - Normalize token usage and static file MIME types
+- **UI fixes**
+  - Fixed system instruction color display
+  - Fixed sticky tool header flicker during scroll
+
+### Changed
+
+- **Code organization** - Refactored UI into modular components and hooks
+- **CLI improvements** - Centralized Rich Console instance for unified output
+- **Better feedback** - CLI now uses `console.status` for improved user feedback
+- **OpenAI compatibility** - Normalize OpenAI system content to string format
+
+---
+
 ## [1.3.0] - 2025-12-09
 
 ### Added
@@ -122,4 +152,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pydantic for data models and validation
 - Click for CLI interface
 - Rich for beautiful terminal output
-
