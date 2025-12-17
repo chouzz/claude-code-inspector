@@ -348,7 +348,7 @@ async def run_watch_proxy(
     with redirect_stdout(null_stream):
         master = DumpMaster(opts)
         master.addons.add(addon)
-    
+
     # Try to remove eventlog addon if it exists
     try:
         from mitmproxy.addons import eventstore
