@@ -323,7 +323,7 @@ async def run_watch_proxy(
     mitmproxy_logger = logging.getLogger("mitmproxy")
     mitmproxy_logger.setLevel(logging.WARNING)
     mitmproxy_logger.propagate = False
-    
+
     mitmproxy_console_logger = logging.getLogger("mitmproxy.console")
     mitmproxy_console_logger.setLevel(logging.WARNING)
     mitmproxy_console_logger.propagate = False
