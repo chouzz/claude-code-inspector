@@ -68,8 +68,6 @@ class WatchAddon:
             self._logger.debug("URL not matched, skipping: %s", url)
             return
 
-        self._logger.info("Capturing request: %s %s", flow.request.method, url)
-
         # Generate unique request ID
         request_id = str(uuid4())
         flow_id = id(flow)
@@ -341,17 +339,26 @@ async def run_watch_proxy(
     )
 
     # Create and run DumpMaster
-    master = DumpMaster(opts)
-    master.addons.add(addon)
+    # Suppress mitmproxy's default console output by redirecting stdout temporarily
+    import sys
+    from contextlib import redirect_stdout
+    from io import StringIO
     
-    # Disable mitmproxy's console event log output
-    # The output like "127.0.0.1:54712: POST http://..." comes from eventlog addon
+    # Create a null output stream
+    null_stream = StringIO()
+    
+    # Redirect stdout during DumpMaster creation to suppress console output
+    with redirect_stdout(null_stream):
+        master = DumpMaster(opts)
+        master.addons.add(addon)
+    
+    # Try to remove eventlog addon if it exists
     try:
         from mitmproxy.addons import eventstore
-        for addon_name, addon_instance in master.addons.items():
+        for addon_name in list(master.addons.keys()):
+            addon_instance = master.addons[addon_name]
             if isinstance(addon_instance, eventstore.EventStore):
                 master.addons.remove(addon_name)
-                break
     except Exception:
         pass
 
