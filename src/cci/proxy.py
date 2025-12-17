@@ -343,6 +343,17 @@ async def run_watch_proxy(
     # Create and run DumpMaster
     master = DumpMaster(opts)
     master.addons.add(addon)
+    
+    # Disable mitmproxy's console event log output
+    # The output like "127.0.0.1:54712: POST http://..." comes from eventlog addon
+    try:
+        from mitmproxy.addons import eventstore
+        for addon_name, addon_instance in master.addons.items():
+            if isinstance(addon_instance, eventstore.EventStore):
+                master.addons.remove(addon_name)
+                break
+    except Exception:
+        pass
 
     logger.info("Watch proxy initialized, monitoring traffic...")
 
