@@ -7,6 +7,7 @@ Handles traffic interception, data capture, and sensitive data masking.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -97,7 +98,6 @@ class WatchAddon:
         }
 
         self.watch_manager.write_record(record)
-        log_request_summary(flow.request.method, url)
         self._logger.debug("Captured request %s to %s", request_id[:8], url)
 
     def response(self, flow: http.HTTPFlow) -> None:
@@ -146,10 +146,7 @@ class WatchAddon:
                 "total_chunks": len(sse_events),
             }
             self.watch_manager.write_record(meta_record)
-            self._logger.info(
-                "Streaming response complete: %d events in %.0fms",
-                len(sse_events), latency_ms
-            )
+            # Final summary will be logged by log_request_summary below
         else:
             # Non-streaming response - capture complete body
             headers = self._mask_headers(dict(flow.response.headers))
@@ -167,11 +164,9 @@ class WatchAddon:
                 "latency_ms": latency_ms,
             }
             self.watch_manager.write_record(record)
-            self._logger.info(
-                "Response captured: %s %s -> %d (%.0fms)",
-                flow.request.method, url, flow.response.status_code, latency_ms
-            )
+            # Final summary will be logged by log_request_summary below
 
+        # Log final request summary with status code and latency
         log_request_summary(
             flow.request.method,
             url,
@@ -327,6 +322,17 @@ async def run_watch_proxy(
     """
     logger = get_logger()
     logger.info("Starting watch proxy on %s:%d", config.proxy.host, config.proxy.port)
+
+    # Disable mitmproxy's default logging to avoid duplicate/conflicting logs
+    # We use our own logging system instead
+    mitmproxy_logger = logging.getLogger("mitmproxy")
+    mitmproxy_logger.setLevel(logging.WARNING)  # Only show warnings and errors
+    mitmproxy_logger.propagate = False  # Don't propagate to root logger
+    
+    # Also disable mitmproxy console output
+    mitmproxy_console_logger = logging.getLogger("mitmproxy.console")
+    mitmproxy_console_logger.setLevel(logging.WARNING)
+    mitmproxy_console_logger.propagate = False
 
     url_filter = URLFilter(config.filter)
 
