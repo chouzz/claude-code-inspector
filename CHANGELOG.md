@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FastAPI server** - Backend API for serving UI and session data
   - RESTful endpoints for sessions and session details
   - Static file serving for bundled React app
-- **UI auto-launch** - `cci watch` now automatically starts the UI server (default: enabled)
+- **UI auto-launch** - `lli watch` now automatically starts the UI server (default: enabled)
 - **Build script** - `build_ui.py` for building frontend assets
 
 ### Changed
@@ -127,10 +127,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Stream merger utility to consolidate streaming chunks
 
 - **CLI Commands**
-  - `cci capture` - Start proxy and capture LLM API traffic
-  - `cci merge` - Merge streaming response chunks into complete records
-  - `cci config` - Display configuration and setup help
-  - `cci stats` - Show statistics for captured trace files
+  - `lli watch` - Start proxy and capture LLM API traffic (replaces `cci capture`)
+  - `lli merge` - Merge streaming response chunks into complete records
+  - `lli config` - Display configuration and setup help
+  - `lli stats` - Show statistics for captured trace files
 
 - **Supported LLM Providers**
   - Anthropic (api.anthropic.com)

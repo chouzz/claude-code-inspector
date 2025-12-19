@@ -20,12 +20,12 @@ from mitmproxy import http
 from mitmproxy.options import Options
 from mitmproxy.tools.dump import DumpMaster
 
-from cci.config import CCIConfig
-from cci.filters import URLFilter
-from cci.logger import get_logger, log_request_summary, log_streaming_progress
+from lli.config import LLIConfig
+from lli.filters import URLFilter
+from lli.logger import get_logger, log_request_summary, log_streaming_progress
 
 if TYPE_CHECKING:
-    from cci.watch import WatchManager
+    from lli.watch import WatchManager
 
 
 class WatchAddon:
@@ -38,7 +38,7 @@ class WatchAddon:
 
     def __init__(
         self,
-        config: CCIConfig,
+        config: LLIConfig,
         watch_manager: WatchManager,
         url_filter: URLFilter,
     ):
@@ -46,7 +46,7 @@ class WatchAddon:
         Initialize the watch addon.
 
         Args:
-            config: CCI configuration
+            config: LLI configuration
             watch_manager: WatchManager instance for session management
             url_filter: URL filter for traffic selection
         """
@@ -310,14 +310,14 @@ class WatchAddon:
 
 
 async def run_watch_proxy(
-    config: CCIConfig,
+    config: LLIConfig,
     watch_manager: WatchManager,
 ) -> None:
     """
     Start the mitmproxy server in watch mode.
 
     Args:
-        config: CCI configuration
+        config: LLI configuration
         watch_manager: WatchManager instance for session management
     """
     logger = get_logger()

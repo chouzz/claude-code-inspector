@@ -7,7 +7,7 @@ For backward compatibility, the legacy command `cci` is also provided.
 
 from __future__ import annotations
 
-from cci.cli import main as _legacy_main
+from lli.cli import main as _legacy_main
 
 
 def main() -> None:

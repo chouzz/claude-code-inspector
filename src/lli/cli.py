@@ -18,17 +18,17 @@ import click
 from rich.panel import Panel
 from rich.table import Table
 
-from cci import __version__
-from cci.config import get_cert_info, load_config
+from lli import __version__
+from lli.config import get_cert_info, load_config
 
 if TYPE_CHECKING:
-    from cci.config import CCIConfig
-    from cci.watch import WatchManager
+    from lli.config import LLIConfig
+    from lli.watch import WatchManager
 
-from cci.logger import get_console, setup_logger
-from cci.merger import merge_streams
-from cci.splitter import split_records
-from cci.storage import count_records
+from lli.logger import get_console, setup_logger
+from lli.merger import merge_streams
+from lli.splitter import split_records
+from lli.storage import count_records
 
 # Use the shared console from logger module for coordinated output
 # This ensures proper coordination between Live displays and logging
@@ -436,7 +436,7 @@ def watch(
 
         export NODE_EXTRA_CA_CERTS=~/.mitmproxy/mitmproxy-ca-cert.pem
     """
-    from cci.watch import WatchManager
+    from lli.watch import WatchManager
 
     # Load configuration
     config = load_config(ctx.obj.get("config_path"))
@@ -468,7 +468,7 @@ def watch(
 
     # Launch UI server if requested
     if ui:
-        from cci.server import run_server
+        from lli.server import run_server
 
         ui_host = "127.0.0.1"
         ui_port = 8000  # TODO: Make configurable
@@ -513,7 +513,7 @@ def watch(
 
     def run_proxy_in_thread() -> None:
         """Run the proxy in a separate thread."""
-        from cci.proxy import run_watch_proxy
+        from lli.proxy import run_watch_proxy
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -551,7 +551,7 @@ def _display_watch_banner(
     port: int,
     output_dir: str,
     global_log_path: Path,
-    config: CCIConfig,
+    config: LLIConfig,
 ) -> None:
     """Display the watch mode startup banner."""
     console.print()
@@ -577,7 +577,7 @@ def _display_watch_banner(
     console.print()
 
 
-def _display_filter_rules(config: CCIConfig) -> None:
+def _display_filter_rules(config: LLIConfig) -> None:
     """Display the current URL filter rules."""
     console.print("[bold cyan]URL Filter Rules:[/]")
 
@@ -613,7 +613,7 @@ def _display_filter_rules(config: CCIConfig) -> None:
 
 def _run_watch_loop(watch_manager: WatchManager, stop_event: threading.Event) -> None:
     """Run the main watch mode interaction loop."""
-    from cci.watch import WatchState
+    from lli.watch import WatchState
 
     while not stop_event.is_set():
         state = watch_manager.state

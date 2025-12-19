@@ -43,8 +43,8 @@ jobs:
 
       - name: Copy UI assets to static directory
         run: |
-          mkdir -p src/cci/static
-          cp -r ui/dist/* src/cci/static/
+          mkdir -p src/lli/static
+          cp -r ui/dist/* src/lli/static/
 
       - name: Build package
         run: uv build

@@ -9,7 +9,7 @@ def build_ui():
     """Build the React UI and copy assets to the Python package."""
     root_dir = Path(__file__).parent
     ui_dir = root_dir / "ui"
-    static_dir = root_dir / "src" / "cci" / "static"
+    static_dir = root_dir / "src" / "lli" / "static"
 
     # On Windows, npm is a batch script and requires shell=True
     use_shell = sys.platform == "win32"

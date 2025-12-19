@@ -4,8 +4,8 @@ LLM Interceptor (LLI)
 Intercept and analyze LLM traffic from AI coding tools.
 
 This project was formerly distributed as "claude-code-inspector". The legacy
-import package `cci` and CLI command `cci` are kept for backward compatibility,
-but new code should prefer `llm_interceptor` and the `lli` command.
+import package `lli` (formerly `cci`) and CLI command `lli` are the canonical names.
+New code should prefer `llm_interceptor` and the `lli` command.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def _get_version() -> str:
         return version("llm-interceptor")
     except PackageNotFoundError:
         try:
-            from cci import __version__ as legacy_version  # type: ignore
+            from lli import __version__ as legacy_version  # type: ignore
 
             return legacy_version
         except Exception:

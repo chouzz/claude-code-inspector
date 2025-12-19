@@ -12,7 +12,7 @@ import streamlit as st
 st.set_page_config(layout="wide", page_title="LLM Interceptor", page_icon="🔍")
 
 # Determine BASE_DIR relative to the project root
-# Assuming this script is in src/cci/app.py and traces is in project root
+# Assuming this script is in src/lli/app.py and traces is in project root
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BASE_DIR = PROJECT_ROOT / "traces"
 

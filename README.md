@@ -10,7 +10,7 @@
 
 ---
 
-![CCI Web UI](cci-ui-screenshot.png)
+![LLI Web UI](cci-ui-screenshot.png)
 
 ## ✨ Features
 
