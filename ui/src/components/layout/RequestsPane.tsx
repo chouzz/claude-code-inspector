@@ -327,7 +327,7 @@ const RequestItem = React.memo<{
             >
               {exchange.rawRequest.method}
             </span>
-            {hasRequestNote && <MessageCircle size={10} className="text-amber-500 flex-shrink-0" />}
+            {hasRequestNote && !isEditingRequest && <MessageCircle size={10} className="text-amber-500 flex-shrink-0" />}
           </div>
           <span
             className={`text-[10px] font-mono flex items-center gap-1 px-1 rounded ${
@@ -387,45 +387,45 @@ const RequestItem = React.memo<{
             )}
           </div>
         </div>
-      </div>
 
-      {/* Inline Note Editor for Request */}
-      {isEditingRequest && selectedSessionId && (
-        <div className="mx-2 my-1 border-b border-gray-100 dark:border-slate-800/50 pb-2">
-          <div className="relative">
+        {/* Note Section - inside the card */}
+        {!isEditingRequest && hasRequestNote && (
+          <Tooltip text={requestNote}>
+            <div
+              className="mt-2 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded border-l-2 border-amber-400 dark:border-amber-600 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors truncate"
+              onClick={(e) => { e.stopPropagation(); handleEditNote(); }}
+              title="Click to edit"
+            >
+              {requestNote}
+            </div>
+          </Tooltip>
+        )}
+
+        {/* Note Editor - inside the card */}
+        {isEditingRequest && (
+          <div className="mt-2 relative">
             <textarea
               autoFocus
               value={requestNote}
               onChange={handleUpdateNote}
               onKeyDown={handleKeyDown}
-              placeholder="Add a note... (Enter to save, Shift+Enter for newline)"
-              className="w-full text-xs p-2 pr-8 border border-amber-300 dark:border-amber-700 rounded-md bg-amber-50 dark:bg-amber-950/30 text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 dark:focus:ring-amber-600"
+              onBlur={handleSaveNote}
+              placeholder="Add a note..."
+              className="w-full text-xs p-1.5 pr-6 border border-amber-300 dark:border-amber-700 rounded bg-amber-50 dark:bg-amber-950/30 text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400 dark:focus:ring-amber-600"
               rows={2}
+              onClick={(e) => e.stopPropagation()}
             />
             <button
-              onClick={handleSaveNote}
-              className="absolute top-1.5 right-1.5 p-1 hover:bg-amber-200 dark:hover:bg-amber-800 rounded text-amber-600 dark:text-amber-400"
+              onClick={(e) => { e.stopPropagation(); handleSaveNote(); }}
+              className="absolute top-1 right-1 p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 rounded text-amber-600 dark:text-amber-400"
               title="Done (Enter)"
               type="button"
             >
-              <Check size={12} />
+              <Check size={10} />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Display Note (when not editing) */}
-      {!isEditingRequest && hasRequestNote && (
-        <Tooltip text={requestNote}>
-          <div
-            className="mx-2 my-1 px-2 py-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded border-l-2 border-amber-400 dark:border-amber-600 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors border-b border-gray-100 dark:border-slate-800/50"
-            onClick={handleEditNote}
-            title="Click to edit"
-          >
-            <div className="line-clamp-2">{requestNote}</div>
-          </div>
-        </Tooltip>
-      )}
+        )}
+      </div>
     </div>
   );
 });

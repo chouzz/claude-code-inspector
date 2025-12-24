@@ -88,36 +88,51 @@ export const SessionsSidebar: React.FC<{
       }, [session.id]);
 
       return (
-        <div key={session.id} className="relative">
-          <button
-            onClick={handleSelectSession}
-            className={`w-full text-left rounded-lg text-sm font-medium transition-all duration-200 group relative ${
-              isCollapsed ? 'p-2 flex justify-center' : 'px-3 py-3'
-            } ${
-              isSelected
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 shadow-inner ring-1 ring-blue-100 dark:ring-blue-900/30'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-            title={session.id}
-            type="button"
-          >
-            {isSelected && !isCollapsed && (
-              <div className="absolute left-0 top-3 bottom-3 w-1 bg-blue-500 rounded-r-full"></div>
-            )}
-            {isCollapsed ? (
-              <div className="relative">
-                <FolderOpen
-                  size={20}
-                  className={
-                    isSelected
-                      ? 'text-blue-600 dark:text-blue-400'
-                      : 'text-slate-400 dark:text-slate-600'
-                  }
-                />
-                {hasNote && <div className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full"></div>}
-              </div>
-            ) : (
-              <>
+        <div key={session.id}>
+          {/* Collapsed state */}
+          {isCollapsed ? (
+            <div
+              onClick={handleSelectSession}
+              className={`h-12 flex items-center justify-center cursor-pointer border-b border-gray-100 dark:border-slate-800/50 relative rounded-lg mb-1 ${
+                isSelected ? 'bg-blue-50 dark:bg-slate-800' : ''
+              }`}
+            >
+              <FolderOpen
+                size={20}
+                className={
+                  isSelected
+                    ? 'text-blue-600 dark:text-blue-400'
+                    : 'text-slate-400 dark:text-slate-600'
+                }
+              />
+              {hasNote && <div className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full"></div>}
+            </div>
+          ) : (
+            <div>
+              <div
+                onClick={handleSelectSession}
+                className={`px-3 py-3 border-b border-gray-100 dark:border-slate-800/50 cursor-pointer transition-colors group relative rounded-lg mb-1 ${
+                  isSelected ? 'bg-blue-50 dark:bg-slate-800/80 shadow-md z-10' : 'hover:bg-gray-50 dark:hover:bg-slate-800/30'
+                }`}
+                title={session.id}
+              >
+                {/* Action Buttons (appear on hover) */}
+                <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleToggleEdit(); }}
+                    className="p-1.5 bg-white dark:bg-slate-700 rounded shadow-sm hover:scale-110"
+                    title="Edit note"
+                    type="button"
+                  >
+                    <Pencil size={12} className="text-slate-500 dark:text-slate-300" />
+                  </button>
+                </div>
+
+                {/* Selection indicator */}
+                {isSelected && (
+                  <div className="absolute left-0 top-3 bottom-3 w-1 bg-blue-500 rounded-r-full"></div>
+                )}
+
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <FolderOpen
@@ -128,74 +143,58 @@ export const SessionsSidebar: React.FC<{
                           : 'text-slate-400 dark:text-slate-600'
                       }
                     />
-                    <span className="font-semibold truncate max-w-[120px]" title={session.id}>
+                    <span className="font-semibold truncate max-w-[120px] text-slate-700 dark:text-slate-200" title={session.id}>
                       {session.id.split('_').pop()}
                     </span>
                   </div>
                   <div className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
                     <span>{session.request_count}</span>
-                    {hasNote && <MessageCircle size={10} className="text-amber-500" />}
+                    {hasNote && !isEditing && <MessageCircle size={10} className="text-amber-500" />}
                   </div>
                 </div>
                 <div className="text-xs text-slate-400 dark:text-slate-500">
                   {formatTimestamp(session.timestamp)}
                 </div>
-              </>
-            )}
-          </button>
 
-          {!isCollapsed && (
-            <>
-              {/* Action Buttons (appear on hover) */}
-              <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                <button
-                  onClick={handleToggleEdit}
-                  className="p-1.5 bg-white dark:bg-slate-700 rounded shadow-sm hover:scale-110"
-                  title="Edit note"
-                  type="button"
-                >
-                  <Pencil size={12} className="text-slate-500 dark:text-slate-300" />
-                </button>
-              </div>
+                {/* Note Section - inside the card */}
+                {!isEditing && hasNote && (
+                  <Tooltip text={sessionNote}>
+                    <div
+                      className="mt-2 px-2 py-1 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded border-l-2 border-amber-400 dark:border-amber-600 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors truncate"
+                      onClick={(e) => { e.stopPropagation(); handleEditNote(); }}
+                      title="Click to edit"
+                    >
+                      {sessionNote}
+                    </div>
+                  </Tooltip>
+                )}
 
-              {/* Inline Note Editor */}
-              {isEditing && (
-                <div className="mt-2 mx-2">
-                  <div className="relative">
+                {/* Note Editor - inside the card */}
+                {isEditing && (
+                  <div className="mt-2 relative">
                     <textarea
                       autoFocus
                       value={sessionNote}
                       onChange={handleUpdateNote}
                       onKeyDown={handleKeyDown}
+                      onBlur={handleSaveNote}
                       placeholder="Add a note..."
-                      className="w-full text-xs p-2 pr-8 border border-amber-300 dark:border-amber-700 rounded-md bg-amber-50 dark:bg-amber-950/30 text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 dark:focus:ring-amber-600"
+                      className="w-full text-xs p-1.5 pr-6 border border-amber-300 dark:border-amber-700 rounded bg-amber-50 dark:bg-amber-950/30 text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400 dark:focus:ring-amber-600"
                       rows={2}
+                      onClick={(e) => e.stopPropagation()}
                     />
                     <button
-                      onClick={handleSaveNote}
-                      className="absolute top-1.5 right-1.5 p-1 hover:bg-amber-200 dark:hover:bg-amber-800 rounded text-amber-600 dark:text-amber-400"
+                      onClick={(e) => { e.stopPropagation(); handleSaveNote(); }}
+                      className="absolute top-1 right-1 p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 rounded text-amber-600 dark:text-amber-400"
                       title="Done (Enter)"
                       type="button"
                     >
-                      <Check size={12} />
+                      <Check size={10} />
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* Display Note */}
-              {!isEditing && hasNote && (
-                <Tooltip text={sessionNote}>
-                  <div
-                    className="mt-2 mx-2 px-2 py-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded border-l-2 border-amber-400 dark:border-amber-600 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/30 transition-colors"
-                    onClick={handleEditNote}
-                    title="Click to edit"
-                  >
-                    <div className="line-clamp-2">{sessionNote}</div>
-                  </div>
-                </Tooltip>
-              )}
-            </>
+                )}
+              </div>
+            </div>
           )}
         </div>
       );
