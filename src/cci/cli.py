@@ -12,8 +12,7 @@ import socket
 import sys
 import threading
 from pathlib import Path
-from typing import Literal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import click
 from rich.panel import Panel
